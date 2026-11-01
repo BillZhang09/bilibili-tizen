@@ -8,6 +8,7 @@ var Settings = (function () {
         if (data) { return data; }
         try { data = JSON.parse(localStorage.getItem(KEY) || "{}"); }
         catch (e) { data = {}; }
+        if (!data || typeof data !== "object" || Array.isArray(data)) { data = {}; }
         return data;
     }
 
@@ -17,11 +18,37 @@ var Settings = (function () {
      * 那几档要别的 fnval 位和色彩处理，没验证过。 */
     var QN_STEPS = [120, 112, 80, 64, 32];
 
+    function language(track) {
+        var lang = String((track || {}).lan || "").toLowerCase().replace(/^ai-/, "");
+        /* Bilibili calls AI simplified Chinese ai-zh, but human tracks zh-CN. */
+        if (/^(zh|zh-cn|zh-sg|zh-hans)$/.test(lang)) { return "zh-hans"; }
+        if (/^(zh-tw|zh-hk|zh-hant)$/.test(lang)) { return "zh-hant"; }
+        if (lang === "en" || lang.indexOf("en-") === 0) { return "en"; }
+        return lang;
+    }
+
     return {
         qnSteps: function () { return QN_STEPS.slice(); },
         qnCap: function () {
             var q = Number(this.get("maxQn", 120));
             return QN_STEPS.indexOf(q) >= 0 ? q : 120;
+        },
+        subtitleLanguage: function () {
+            var lang = this.get("subtitleLanguage", "");
+            return typeof lang === "string" && /^[a-z0-9-]{1,32}$/.test(lang) ? language({ lan: lang }) : "";
+        },
+        subtitleLanguageOf: language,
+        chooseSubtitle: function (tracks) {
+            var preferred = this.subtitleLanguage(), best = null, score = -1;
+            for (var i = 0; i < tracks.length; i++) {
+                var t = tracks[i];
+                if (!t || !t.subtitle_url) { continue; }
+                var lang = language(t), ai = !!t.ai_type || /^ai-/.test(t.lan || "");
+                var rank = (preferred && lang === preferred ? 100 : 0) +
+                    (/^zh/.test(lang) ? 20 : 0) + (ai ? 0 : 1);
+                if (rank > score) { best = t; score = rank; }
+            }
+            return best;
         },
         get: function (k, fallback) {
             var v = load()[k];
