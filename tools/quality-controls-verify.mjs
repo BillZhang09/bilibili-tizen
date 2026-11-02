@@ -221,7 +221,7 @@ await check('native live excludes VOD prebuffering and mute',()=>{
 });
 context.Date=Date;
 // The production application is evaluated intact; window.onload is not run.
-context.Player={on:f=>eventHandler=f,qualityChoices:d=>d?Mpd.tiers(d,120):[],currentQuality:()=>0,
+context.Player={formatStatus:()=>({}),on:f=>eventHandler=f,qualityChoices:d=>d?Mpd.tiers(d,120):[],currentQuality:()=>0,
   selectQuality:()=>false,hasPosition:()=>true,position:()=>42000,userPaused:()=>true,rate:()=>1,
   playDash:(...args)=>calls.push(['dash',...args]),playProgressive:(...args)=>calls.push(['prog',...args])};
 let appSource=source('app/js/app.js');
@@ -335,5 +335,35 @@ await check('new video and newer selection invalidate earlier stream responses',
 await check('quality choices return focus to their entry',()=>{
  session();app.bind();node('panel-quality').onselect();assert.equal(context.__keyHandler(10009),true);
  assert.equal(app.choice(),'');assert.equal(focus,node('panel-quality'));
+});
+await check('HDR shortcut raises the cap only after the actual HDR track is ready',()=>{
+ context.webapis.avinfo={isHdrTvSupport:()=>true};Settings.set('maxQn',120);Settings.set('preferredQn',0);
+ const hd={...dash,video:[{...rep(125),codecs:'hvc1.2.4.L150.90',width:3840,height:2160},...dash.video]};
+ let actual=80;context.Player.currentQuality=()=>actual;
+ let requested;context.API.playurlDash=(b,c,q,ok,fail)=>{requested=q;dashReply={ok,fail};};progReply=null;
+ session({route:'dash',dashReady:hd});app.quality(125);assert.equal(requested,125);assert.equal(progReply,null);
+ assert.equal(Settings.qnCap(),120);dashReply.ok(hd);assert.equal(calls.at(-1)[3].capId,125);assert.equal(Settings.qnCap(),120);
+ actual=125;eventHandler('quality',{id:125});eventHandler('ready',{});assert.equal(Settings.qnCap(),125);assert.equal(Settings.qualityPreference(),125);
+ assert.equal(node('panel-quality').textContent,'画质 HDR10');
+});
+await check('HDR fallback cannot save a guessed HDR tier or raise the global cap',()=>{
+ Settings.set('maxQn',120);Settings.set('preferredQn',80);context.Player.currentQuality=()=>80;
+ const hd={...dash,video:[{...rep(125),codecs:'hvc1.2.4.L150.90'},...dash.video]};
+ session({route:'dash',dashReady:hd});app.quality(125);dashReply.ok(hd);eventHandler('ready',{});
+ assert.equal(Settings.qnCap(),120);assert.equal(Settings.qualityPreference(),80);
+});
+await check('HDR preparation uses a strong token without tearing down the playing stream',()=>{
+ const hd={...dash,video:[{...rep(125),codecs:'hvc1.2.4.L150.90'},...dash.video]};
+ context.Auth.isLoggedIn=()=>true;context.Auth.accessKey=()=> 'controlled-key';context.Player.badFilesFor=()=>[];
+ let strong;context.API.playurlDashStrong=(aid,cid,cap,ok,fail,avoid,web)=>{strong={aid,cid,cap,ok,web};};
+ session({detail:{bvid:'BVTEST',aid:123},route:'dash',dashReady:dash});app.quality(125);dashReply.ok(hd);
+ assert.equal(strong.aid,123);assert.equal(strong.cap,125);assert.equal(strong.web,hd);assert.equal(calls.length,0);
+ strong.ok({...hd,strong:true});assert.equal(calls.at(-1)[0],'dash');assert.equal(calls.at(-1)[3].capId,125);
+ context.Auth.isLoggedIn=()=>false;context.Auth.accessKey=()=>'';
+});
+await check('audio status follows the active track and clears while a new load is pending',()=>{
+ session({route:'dash'});context.Player.formatStatus=()=>({audio:'Dolby Atmos'});app.paint();assert.equal(node('playback-audio').textContent,'音频 Dolby Atmos');
+ context.Player.formatStatus=()=>({audio:''});app.paint();assert.ok(node('playback-audio').className.includes('hidden'));
+ context.Player.formatStatus=()=>({audio:'AAC',atmosFailed:true});app.paint();assert.match(node('playback-control-status').textContent,/已使用 AAC/);
 });
 console.log(`${count}/${count} playback control scenarios passed (controlled media, not device acceptance).`);

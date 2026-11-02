@@ -192,6 +192,8 @@ suit how big the TV is and how far the sofa). These come from
 
 Press Down during playback to choose a quality or return to Auto. The preference persists across videos and app restarts, within the global quality cap. If unavailable, the player uses the nearest lower tier, or the lowest available tier, and displays the actual result without replacing the preference. Switching preserves position, speed and the latest pause or play command; failures restore the original stream.
 
+This feature branch adds HDR10 and a “Prefer Dolby Atmos” switch. The initial cap stays at 4K with Auto quality. A successful HDR10 switch saves the preference and raises the cap; videos without HDR use SDR while retaining the preference. Atmos is preferred by default and the panel shows the active audio. Failed special formats fall back independently to SDR or AAC, once per video session. S85F checks cover track selection, position preservation and AAC recovery from a real truncated response. TV-side HDR output and sustained Atmos sound/picture acceptance remain open; see the [validation record](docs/HDR10-Atmos-适配验证.md). This branch is not merged or released.
+
 **Does not**:
 - **Casting from the phone.** A cast receiver has to listen on a port; a Tizen
   web widget cannot, regardless of how official it is. The substitute is

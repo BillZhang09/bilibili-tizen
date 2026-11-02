@@ -584,7 +584,15 @@ var API = (function () {
      * so it costs ordinary accounts nothing. Whether a 大会员 account needs it
      * to be handed the 120 tier has not been seen from here (nobody in this
      * house has 大会员); it is sent because the reference client sends it. */
-    function fnvalFor(qn) { return 2064 | (qn >= 120 ? 128 : 0); }
+    function hdrRequest() { return typeof Mpd !== "undefined" && Mpd.hdrSupported(); }
+    function atmosRequest() {
+        return typeof Mpd !== "undefined" && Mpd.audioSupported("ec-3") &&
+            (typeof Settings === "undefined" || Settings.preferAtmos());
+    }
+    function requestQn(qn) { return hdrRequest() ? 125 : (qn || 80); }
+    function fnvalFor(qn) {
+        return 2064 | (qn >= 120 ? 128 : 0) | (hdrRequest() ? 64 : 0) | (atmosRequest() ? 256 : 0);
+    }
 
     /* Where the init segment and the segment index live inside the file, kept
      * as the "0-916" strings the API states them in — that is the form a DASH
@@ -597,6 +605,84 @@ var API = (function () {
         var index = sb.indexRange || sb.index_range || "";
         if (!/^\d+-\d+$/.test(init) || !/^\d+-\d+$/.test(index)) { return null; }
         return { init: init, index: index };
+    }
+
+    /* E-AC-3's AudioSampleEntry can say stereo even when the dec3 box says
+     * 5.1. Read the decoder configuration, not a guessed 44.1 kHz/stereo label. */
+    function audioInitInfo(buf) {
+        var a = new Uint8Array(buf), view = new DataView(buf);
+        for (var i = 4; i + 9 <= a.length; i++) {
+            if (a[i] !== 100 || a[i + 1] !== 101 || a[i + 2] !== 99 || a[i + 3] !== 51) { continue; }
+            var size = view.getUint32(i - 4), start = i + 4;
+            if (size < 13 || i - 4 + size > a.length) { continue; }
+            var bits = function (at, count) {
+                var n = 0;
+                for (var k = 0; k < count; k++) { n = n * 2 + ((a[start + ((at + k) >> 3)] >> (7 - ((at + k) & 7))) & 1); }
+                return n;
+            };
+            if (bits(13, 3) !== 0 || bits(35, 4) !== 0) { return null; }
+            var rate = [48000, 44100, 32000][bits(16, 2)];
+            if (!rate) { return null; }
+            return { audioSamplingRate: rate, channels: [2, 1, 2, 3, 3, 4, 4, 5][bits(28, 3)] + bits(31, 1) };
+        }
+        return null;
+    }
+
+    function dashMirrors(rep) {
+        return mirrors(rep.baseUrl || rep.base_url, [].concat(rep.urls || [], rep.backupUrl || rep.backup_url || []), false)
+            .filter(function (u, i, all) { return all.indexOf(u) === i; });
+    }
+
+    var audioInfoCache = {};
+    function prepareAudio(dash, done) {
+        var list = (dash.audio || []).slice(), dolby = dash.dolby || {};
+        (dolby.audio || []).forEach(function (r) {
+            var existing = list.filter(function (a) { return a.id === r.id; })[0];
+            if (existing) { r = existing; } else { list.push(r); }
+            /* Bilibili identifies these as its Atmos tracks. Generic ec-3 is
+             * Dolby Audio and must not acquire a JOC label from its codec. */
+            if (dolby.type === 2 && (r.id === 30250 || r.id === 30255) && r.codecs === "ec-3") { r.spatialAudio = true; }
+        });
+        dash.audio = list;
+        var pending = 1;
+        function settled() { if (--pending === 0) { done(); } }
+        list.forEach(function (r) {
+            r.urls = dashMirrors(r);
+            r.baseUrl = r.urls[0];
+            r.segments = r.segments || segmentBaseOf(r);
+            r.audioSamplingRate = Number(r.audioSamplingRate || r.sample_rate || r.sampling_rate) || 0;
+            r.channels = Number(r.channels) || 0;
+            if (r.codecs !== "ec-3" || !r.spatialAudio || !atmosRequest()) { return; }
+            if (!r.urls.length) { r.spatialAudio = false; return; }
+            var key = streamPath(r.baseUrl), cached = audioInfoCache[key];
+            if (cached) { r.audioSamplingRate = cached.audioSamplingRate; r.channels = cached.channels; return; }
+            if (r.audioSamplingRate && r.channels) { return; }
+            pending++;
+            var attempt = 0;
+            function read() {
+                var xhr = new XMLHttpRequest(), finished = false;
+                function finish(info) {
+                    if (finished) { return; } finished = true;
+                    if (!info && ++attempt < Math.min(2, r.urls.length)) { read(); return; }
+                    if (info) {
+                        audioInfoCache[key] = info;
+                        r.audioSamplingRate = info.audioSamplingRate; r.channels = info.channels;
+                    } else { r.spatialAudio = false; }
+                    settled();
+                }
+                xhr.open("GET", r.urls[attempt], true); xhr.responseType = "arraybuffer"; xhr.timeout = 1500;
+                xhr.setRequestHeader("Range", "bytes=" + (r.segments ? r.segments.init : "0-8191"));
+                xhr.onload = function () {
+                    var info = null;
+                    if (xhr.status === 206 || xhr.status === 200) { try { info = audioInitInfo(xhr.response); } catch (e) {} }
+                    finish(info);
+                };
+                xhr.onerror = xhr.ontimeout = function () { finish(null); };
+                try { xhr.send(); } catch (e) { finish(null); }
+            }
+            read();
+        });
+        settled();
     }
 
     /* selftest: playurl the way a set just out of standby met it — HTTP 0 at once. */
@@ -1742,9 +1828,9 @@ var API = (function () {
              * and hev tracks only, and the av01-first preference in mpd.js was
              * discovered selecting from a list with zero av01 entries — the
              * web player's av01 default works because its fnval asks for it.
-             * Only the AV1 bit is added; HDR/DoVi/8K stay unrequested. */
+             * HDR and Atmos are requested only when the device supports their decoders; Dolby Vision and 8K remain unrequested. */
             var url = BASE + "/x/player/playurl?bvid=" + bvid + "&cid=" + cid +
-                      "&qn=" + (qn || 64) + "&fnval=" + fnvalFor(qn) + "&fnver=0&fourk=1";
+                      "&qn=" + requestQn(qn || 64) + "&fnval=" + fnvalFor(requestQn(qn || 64)) + "&fnver=0&fourk=1";
             getJson(url, function (d) {
                 if (!d.dash) { onFail("no dash streams"); return; }
 
@@ -1756,8 +1842,7 @@ var API = (function () {
                 function candidates(rep) {
                     /* MSE fetches over XHR, so no http:// twins — they would be
                      * the same hosts listed twice. */
-                    return mirrors(rep.baseUrl || rep.base_url,
-                                   rep.backupUrl || rep.backup_url, false);
+                    return dashMirrors(rep);
                 }
                 var kinds = ["video", "audio"];
                 for (var k = 0; k < kinds.length; k++) {
@@ -1780,7 +1865,7 @@ var API = (function () {
                 var dm = /[?&]deadline=(\d+)/.exec(String(rep0.baseUrl || ""));
                 d.dash.deadline = dm ? parseInt(dm[1], 10) : 0;
                 d.dash.fetchedAt = new Date().getTime();
-                onOk(d.dash);
+                prepareAudio(d.dash, function () { onOk(d.dash); });
             }, onFail);
         },
 
@@ -1835,10 +1920,6 @@ var API = (function () {
             if (typeof Auth === "undefined" || !Auth.accessKey()) {
                 onFail("无 access_key，app 端点不可用"); return;
             }
-            var WH = { 120: [3840, 2160], 116: [1920, 1080], 112: [1920, 1080],
-                       80: [1920, 1080], 74: [1280, 720], 64: [1280, 720],
-                       32: [854, 480], 16: [640, 360] };
-
             /* moov ends the init segment; the sidx that follows is the index.
              * Both stated the way a DASH SegmentBase wants them, "start-end". */
             function ranges(buf) {
@@ -1926,7 +2007,7 @@ var API = (function () {
              * signTv adds appkey+ts+sign; the token identity is access_key. */
             var appUrl = "https://app.bilibili.com/x/playurl?" +
                 Auth.signTv({ access_key: Auth.accessKey(), aid: aid, cid: cid,
-                              qn: qn || 80, fnval: fnvalFor(qn), fnver: 0, fourk: 1,
+                              qn: requestQn(qn), fnval: fnvalFor(requestQn(qn)), fnver: 0, fourk: 1,
                               platform: "android", mobi_app: "android",
                               build: 7280300 });
             /* codecs the app endpoint omits: the web endpoint's low tiers
@@ -1941,7 +2022,7 @@ var API = (function () {
                                      retried: 0, active: 0, starts: [], oldest: 0 };
             var wdDone = false, wdData = null, adData = null, joined = false;
             var url2 = BASE + "/x/player/playurl?avid=" + aid + "&cid=" + cid +
-                       "&qn=" + (qn || 80) + "&fnval=" + fnvalFor(qn) + "&fnver=0&fourk=1";
+                       "&qn=" + requestQn(qn) + "&fnval=" + fnvalFor(requestQn(qn)) + "&fnver=0&fourk=1";
             function url2Settled(wd) {
                 wdData = wd || null; wdDone = true;
                 tCodecs = new Date().getTime() - t0;
@@ -1954,55 +2035,60 @@ var API = (function () {
                 joined = true;
                 var ad = adData;
                 function go() {
-                    var codecsByCid = {}, audioCodecs = "mp4a.40.2";
-                    var wd = wdData || {};
-                    var wv = (wd.dash && wd.dash.video) || [];
-                    for (var w = 0; w < wv.length; w++) { codecsByCid[wv[w].codecid] = wv[w].codecs; }
-                    if (wd.dash && wd.dash.audio && wd.dash.audio[0]) {
-                        audioCodecs = wd.dash.audio[0].codecs || audioCodecs;
-                    }
-                    finish(ad.dash, codecsByCid, audioCodecs);
+                    var web = (wdData && wdData.dash) || {};
+                    prepareAudio(web, function () {
+                        prepareAudio(ad.dash, function () {
+                            var videos = {}, audios = {}, wv = web.video || [];
+                            for (var w = 0; w < wv.length; w++) {
+                                videos[wv[w].id + ":" + wv[w].codecid] = wv[w];
+                                videos[streamPath(wv[w].baseUrl || wv[w].base_url)] = wv[w];
+                            }
+                            (web.audio || []).forEach(function (r) { audios[r.id] = r; });
+                            finish(ad.dash, videos, audios, web);
+                        });
+                    });
                 }
                 go();
 
-                function codecsFor(cid2, map) {
-                    return map[cid2] ||
-                           (cid2 === 7 ? "avc1.640033"
-                          : cid2 === 12 ? "hev1.1.6.L153.90"
-                          : cid2 === 13 ? "av01.0.08M.08" : "avc1.640033");
-                }
-
-                function finish(dash, codecsByCid, audioCodecs) {
+                function finish(dash, videoInfo, audioInfo, web) {
                     function candidates(rep) {
-                        return mirrors(rep.baseUrl || rep.base_url,
-                                       rep.backupUrl || rep.backup_url, false);
+                        return dashMirrors(rep);
                     }
                     var video = dash.video || [], audio = dash.audio || [];
+                    (web.audio || []).forEach(function (r) {
+                        if (r.spatialAudio && !audio.some(function (a) { return a.id === r.id; })) {
+                            r.webToken = true; audio.push(r);
+                        }
+                    });
                     /* Tiers above the cap are never in the manifest (Mpd.build
                      * caps at Settings.qnCap()), so their headers are not worth a
                      * read: each one is ~1 s of a black screen at concurrency
                      * two. Free today (this account is offered ≤80) and a
                      * guard for a 大会员 account or a raised cap. */
                     var cap = qn || 80;
-                    video = video.filter(function (r) { return !(r.id > cap); });
-                    var s, wh;
+                    video = video.filter(function (r) { return !(r.id > requestQn(qn)); });
+                    var s;
                     for (var v = 0; v < video.length; v++) {
                         s = video[v];
                         s.urls = candidates(s);
                         s.baseUrl = s.urls[0];
-                        s.codecs = codecsFor(s.codecid, codecsByCid);
+                        var meta = videoInfo[streamPath(s.baseUrl)] || videoInfo[s.id + ":" + s.codecid] || {};
+                        s.codecs = s.codecs || meta.codecs || "";
                         s.mimeType = "video/mp4";
-                        wh = WH[s.id] || [1920, 1080];
-                        s.width = wh[0]; s.height = wh[1];
+                        s.width = s.width || meta.width || 0; s.height = s.height || meta.height || 0;
                         /* The app endpoint states it snake_case; camelCase is
                          * always undefined, which stamped every rep 25fps. */
-                        s.frameRate = s.frame_rate || s.frameRate || "25";
+                        s.frameRate = s.frame_rate || s.frameRate || meta.frameRate || meta.frame_rate || "25";
                     }
                     for (var a = 0; a < audio.length; a++) {
                         s = audio[a];
                         s.urls = candidates(s);
                         s.baseUrl = s.urls[0];
-                        s.codecs = audioCodecs;
+                        var am = audioInfo[s.id] || {};
+                        s.codecs = s.codecs || am.codecs || ([30280, 30232, 30216].indexOf(s.id) >= 0 ? "mp4a.40.2" : "");
+                        s.spatialAudio = s.spatialAudio === true || am.spatialAudio === true;
+                        s.audioSamplingRate = s.audioSamplingRate || am.audioSamplingRate || 0;
+                        s.channels = s.channels || am.channels || 0;
                         s.mimeType = "audio/mp4";
                     }
                     /* The web answers already say where each file's init and
@@ -2015,6 +2101,8 @@ var API = (function () {
                      * header read. Those reads were 1.8–3.4 s of black screen per
                      * strong start on 10-18 and 3.3 s on 10-20, and a stream
                      * with no match is read exactly as before. */
+                    video = video.filter(function (r) { return !!r.codecs && r.width > 0 && r.height > 0; });
+                    audio = audio.filter(function (r) { return !!r.codecs; });
                     var known = {}, reused = 0;
                     function learnIndex(list) {
                         for (var li = 0; li < (list || []).length; li++) {
@@ -2061,12 +2149,12 @@ var API = (function () {
                     var candidates1 = video.filter(function (r) { return !avoidSet[fileOf(r)]; });
                     var fam = (typeof Mpd !== "undefined" && Mpd.familyFor) ?
                               Mpd.familyFor(candidates1, cap) : "";
-                    var topAudio = audio.slice().sort(function (x, y) {
+                    var topAudio = (typeof Mpd !== "undefined" ? Mpd.peek({ video: [], audio: audio }, cap).audio : null) || audio.slice().sort(function (x, y) {
                         return (y.bandwidth || 0) - (x.bandwidth || 0);
                     })[0];
                     var first = [], later = [];
                     for (var fv = 0; fv < video.length; fv++) {
-                        (fam && Mpd.family(video[fv].codecs) === fam && !avoidSet[fileOf(video[fv])]
+                        (fam && video[fv].id <= cap && Mpd.family(video[fv].codecs) === fam && !avoidSet[fileOf(video[fv])]
                             ? first : later).push(video[fv]);
                     }
                     for (var fa = 0; fa < audio.length; fa++) {
