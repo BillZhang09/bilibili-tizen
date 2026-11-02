@@ -1309,9 +1309,10 @@ var Player = (function () {
             } catch (e) { liveSeen = "读不出：" + (e && e.message); }
         });
         player.addEventListener("error", function (e) {
-            var err = e && e.detail;
+            var err = mediaError(e && e.detail);
             if (formatPending) { return; }
             if (mode === "mse" && err && err.severity === 2 && recoverFormatError(err)) { return; }
+            if (mode === "mse" && err && err.biliIncomplete && offerStrongToken(true, true)) { return; }
             /* Rolling the video track back does not restart a failed shared
              * audio stream. Keep the original error on the recovery path. */
             if (qualitySwitch) { finishQualitySwitch("切换时视频流加载失败：" + describeShakaError(err)); }
@@ -1585,7 +1586,9 @@ var Player = (function () {
                     if (recoverFormatFor(response.uri || response.originalUri, whyRange)) {
                         throw new shaka.util.Error(shaka.util.Error.Severity.RECOVERABLE, shaka.util.Error.Category.PLAYER, shaka.util.Error.Code.OPERATION_ABORTED);
                     }
-                    throw new shaka.util.Error(shaka.util.Error.Severity.CRITICAL, shaka.util.Error.Category.NETWORK, shaka.util.Error.Code.HTTP_ERROR, response.uri, whyRange);
+                    var incomplete = new shaka.util.Error(shaka.util.Error.Severity.CRITICAL, shaka.util.Error.Category.NETWORK, shaka.util.Error.Code.HTTP_ERROR, response.uri, whyRange);
+                    incomplete.biliIncomplete = true;
+                    throw incomplete;
                 }
                 /* The first segment answered after load() settled is media:
                  * init and index are what load() waits for. Typing it by
@@ -1948,7 +1951,7 @@ var Player = (function () {
      * token fired only after the whole family+tier ladder had flooded the
      * limiter. Either signal — a recorded bad file, or a 403 in hand — is
      * enough. */
-    function offerStrongToken(known403) {
+    function offerStrongToken(known403, incomplete) {
         if (strongEmitted) { return false; }
         /* `lastDash.dash.strong` — the flag lives on the playurl payload; the
          * old `lastDash.strong` read an undefined property and never fired. */
@@ -1961,9 +1964,9 @@ var Player = (function () {
          * it did, and the ladder's exit 「回到 web 端点压中低档」 never dropped
          * a tier, it re-asked for a strong token that had just failed. */
         if (lastDash && lastDash.dash) { lastDash.dash.strongTried = true; }
-        log("web 令牌高档被 403 拒，压档前先试 app 端点强令牌");
+        log(incomplete ? "web 流响应不完整，压档前先试 app 端点强令牌" : "web 令牌高档被 403 拒，压档前先试 app 端点强令牌");
         lastDecodeHandled = false;
-        emit("error", "web 令牌 403，交给 app 端点强令牌");
+        emit("error", incomplete ? "web 流响应不完整，交给 app 端点强令牌" : "web 令牌 403，交给 app 端点强令牌");
         return true;
     }
 
@@ -2429,7 +2432,19 @@ var Player = (function () {
         return true;
     }
 
+    /* Shaka wraps response-filter errors as 1007. Preserve the media URI and
+     * category so an audio failure cannot bypass the independent fallback. */
+    function mediaError(err) {
+        for (var i = 0; i < 3 && err && err.code === 1007; i++) {
+            var inner = err.data && err.data[0];
+            if (!inner || typeof inner !== "object" || typeof inner.category !== "number") { break; }
+            err = inner;
+        }
+        return err;
+    }
+
     function recoverFormatError(err) {
+        err = mediaError(err);
         var refused = err && err.category === 1 && err.code === 1001 && err.data &&
             (err.data[1] === 401 || err.data[1] === 403);
         /* Web video refusals must reach the existing strong-token recovery.
@@ -2944,10 +2959,12 @@ var Player = (function () {
         })["catch"](function (e) {
             try { URL.revokeObjectURL(url); } catch (e2) {}
             if (gen !== mseGeneration) { return; }
+            e = mediaError(e);
             /* 7000 is LOAD_INTERRUPTED, which is a newer load winning. */
             if (e && e.code === 7000) { return; }
             if (formatPending) { return; }
             if (recoverFormatError(e)) { return; }
+            if (e && e.biliIncomplete && offerStrongToken(true, true)) { return; }
             if (lastDash && lastDash.hdr && e && e.category === 3 && recoverFormat("hdr", "HDR10 加载失败")) { return; }
             if (lastDash && lastDash.audioCodec === "ec-3" && e && e.category === 3 && recoverFormat("atmos", "杜比音轨加载失败")) { return; }
             if (e && e.qualitySelection) { emit("error", "画质尚未就绪：" + e.message); return; }
@@ -3428,8 +3445,8 @@ var Player = (function () {
         qualityChoices: function (dash) {
             var ids = qualityTracks().map(trackQn);
             if (dash) { ids = ids.concat(Mpd.tiers(dash, Settings.qnCap())); }
-            if (dash && !formatFailures.hdr && Mpd.hasHdr(dash)) { ids.push(125); }
-            return ids.filter(function (id, i) { return ids.indexOf(id) === i && (id !== 125 || !formatFailures.hdr); })
+            if (dash && Mpd.hasHdr(dash, true)) { ids.push(125); }
+            return ids.filter(function (id, i) { return ids.indexOf(id) === i; })
                 .sort(function (a, b) { return b - a; });
         },
         currentQuality: function () { return mode === "mse" && !loadPending ? trackQn(currentVideoTrack(shakaPlayer)) : 0; },
@@ -3548,7 +3565,9 @@ var Player = (function () {
                 audio: t ? (t.audioCodec === "ec-3" ? (t.spatialAudio ? "Dolby Atmos" : "E-AC-3") : /^mp4a/.test(t.audioCodec || "") ? "AAC" : t.audioCodec || "") : "" };
         },
         stop: function (options) {
+            var paused = userPaused;
             reset(true);
+            if (options && options.keepControls) { userPaused = paused; }
             if (!options || !options.keepFormats) { formatFailures = { hdr: false, atmos: false }; }
         },
         lastUnload: function () { return lastUnload; },

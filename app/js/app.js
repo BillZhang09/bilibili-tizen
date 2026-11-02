@@ -4339,11 +4339,11 @@
         sess.timed = false;
         sess.timedLabel = "到画面(强令牌)";
         report("player", why + "，改用强令牌从 " + fmt(atMs) + " 整个重建");
-        Player.stop({ keepFormats: true });
+        Player.stop({ keepFormats: true, keepControls: true });
         sess.dashReady = sd;
         Player.learnStrong(sess.cid, aid);
         var rep = Player.pickDashVideo(sd);
-        playDash(sd, (rep && rep.id) || Settings.qnCap());
+        playDash(sd, (rep && rep.id) || Settings.qnCap(), { paused: Player.userPaused(), quality: Settings.qualityPreference() });
     }
 
     /* The press behind the next play(), for the 到画面 line's 按下起 (D). The
@@ -5915,6 +5915,7 @@
     function changeQuality(qn) {
         var session = playing;
         if (!session || !session.route || session.qualityReady === false || session.qualityBusy) { return; }
+        if (qn === 125 && Player.formatStatus().hdrFailed) { paintPlaybackControls(); return; }
         var selectionCap = qn === 125 ? 125 : Settings.qnCap();
         var revision = (session.qualityRevision || 0) + 1;
         var nativeOnly = stNativeChange && typeof SELFTEST !== "undefined" && SELFTEST === "controls-followup";
@@ -6035,19 +6036,24 @@
         if (playbackChoice === "quality") {
             entries.push({ value: "0", label: automaticQualityName() });
             var ids = controlQualityIds();
-            for (i = 0; i < ids.length; i++) { entries.push({ value: String(ids[i]), label: qualityOptionName(ids[i]) }); }
+            for (i = 0; i < ids.length; i++) {
+                var unavailable = ids[i] === 125 && Player.formatStatus().hdrFailed;
+                entries.push({ value: String(ids[i]), label: qualityOptionName(ids[i]) +
+                    (unavailable ? "（本次播放不可用）" : ""), disabled: unavailable });
+            }
             var preferred = Settings.qualityPreference();
             current = !preferred ? "0" : playing.qualityReady === false ? "" :
                 String(Player.currentQuality() || playing.quality || Settings.resolveQuality(ids, preferred));
         }
         var html = "";
         for (i = 0; i < entries.length; i++) {
-            html += '<div class="opt focusable' + (entries[i].value === current ? " current" : "") +
-                '" role="button" data-playback-choice="' + entries[i].value + '">' + esc(entries[i].label) + "</div>";
+            html += '<div class="opt' + (entries[i].disabled ? "" : " focusable") + (entries[i].value === current ? " current" : "") +
+                '" role="button"' + (entries[i].disabled ? ' aria-disabled="true"' : "") +
+                ' data-playback-choice="' + entries[i].value + '">' + esc(entries[i].label) + "</div>";
         }
         box.innerHTML = html;
         box.className = "opt-row";
-        var nodes = box.querySelectorAll(".opt");
+        var nodes = box.querySelectorAll(".opt.focusable");
         for (i = 0; i < nodes.length; i++) {
             nodes[i].onselect = function () {
                 var value = this.getAttribute("data-playback-choice");
@@ -6055,7 +6061,7 @@
             };
         }
         var wanted = keep !== null ? keep : current;
-        var target = box.querySelector('[data-playback-choice="' + wanted + '"]') || nodes[0];
+        var target = box.querySelector('.focusable[data-playback-choice="' + wanted + '"]') || nodes[0];
         if ((focus || keep !== null) && target) { Nav.focus(target); }
     }
 
@@ -7193,7 +7199,7 @@
          * the other. It also moves AVPlay's stop/close off the critical path:
          * they cost about 570ms and now run alongside the playurl round trip
          * instead of after it. */
-        Player.stop({ keepFormats: true });
+        Player.stop({ keepFormats: true, keepControls: true });
         playing.failed = false;
 
         /* The fallback's own clock. The 到画面 line for this video has already
@@ -7233,7 +7239,7 @@
              * wherever this television last left it, but *only* when the
              * progressive attempt failed first, which is why it never looked
              * like a rule. */
-            playDash(dash, (vrep && vrep.id) || playing.quality || 0);
+            playDash(dash, (vrep && vrep.id) || playing.quality || 0, { paused: Player.userPaused(), quality: Settings.qualityPreference() });
         }
 
         /* play() asked for both forms at once, and this is the other one —
@@ -7899,11 +7905,11 @@
                        (wantStrong ? "app 端点强令牌" : "web 端点") + "），从 " +
                        fmt(atExp) + " 接着放");
                 var sessExp = playing;
-                Player.stop({ keepFormats: true });
+                Player.stop({ keepFormats: true, keepControls: true });
                 var startExp = function (dashExp) {
                     if (playing !== sessExp) { report("player", "过期重取回来时会话已经没了，丢弃"); return; }
                     var repExp = Player.pickDashVideo(dashExp);
-                    playDash(dashExp, (repExp && repExp.id) || Settings.qnCap());
+                    playDash(dashExp, (repExp && repExp.id) || Settings.qnCap(), { paused: Player.userPaused(), quality: Settings.qualityPreference() });
                 };
                 var webExp = function () {
                     API.playurlDash(sessExp.detail.bvid, sessExp.cid, Settings.qnCap(),
@@ -7939,7 +7945,7 @@
              * quiet pipe. Player raises this via offerStrongToken; app.js also
              * reaches it when a load fails outright. */
             if (playing.route === "dash" && !playing.triedStrong &&
-                    String(data).indexOf("403") >= 0 &&
+                    (String(data).indexOf("403") >= 0 || String(data).indexOf("web 流响应不完整") >= 0) &&
                     playing.dashReady && !playing.dashReady.strong &&
                     playing.detail && (playing.detail.aid || playing.detail.bvid)) {
                 /* The real playhead — lastKnownPosition freezes at 0 through the
@@ -7961,7 +7967,7 @@
                 Player.startTiming();
                 playing.timed = false;
                 playing.timedLabel = "到画面(强令牌)";
-                report("player", "web 令牌被拒（403），直奔 app 端点强令牌，从 " +
+                report("player", (/web 流响应不完整/.test(String(data)) ? "web 流响应不完整" : "web 令牌被拒（403）") + "，直奔 app 端点强令牌，从 " +
                        fmt(atMs) + " 重建");
                 var sessST = playing;
                 /* Tear the failing session down before the multi-second sidx
@@ -7971,7 +7977,7 @@
                  * against the strong rebuild. 「任何会启动新播放的入口，第一件事
                  * 都是拆掉旧的」— the rule downgrade() was fixed to obey. atMs was
                  * read above, before this zeroes the playhead. */
-                Player.stop({ keepFormats: true });
+                Player.stop({ keepFormats: true, keepControls: true });
                 /* The aid may not be in hand, and the case where it is missing
                  * is exactly this one. The home feed's cards carry `id` rather
                  * than `aid` (normalise now reads both), and for any card that
@@ -8009,7 +8015,7 @@
                                    (strongDash.tierNote || (strongDash.video ? strongDash.video.length + " 档" : "0 档")) +
                                    (strongDash.strongTiming ? "，" + strongDash.strongTiming : "") +
                                    "，从 " + fmt(playing.startMs || 0) + " 重建");
-                            playDash(strongDash, (repST && repST.id) || Settings.qnCap());
+                            playDash(strongDash, (repST && repST.id) || Settings.qnCap(), { paused: Player.userPaused(), quality: Settings.qualityPreference() });
                         }, function (whyST) {
                             if (playing !== sessST) { report("player", "强令牌回来时会话已经没了，丢弃"); return; }
                             report("player", "app 端点强令牌也不行（" + whyST + "）");

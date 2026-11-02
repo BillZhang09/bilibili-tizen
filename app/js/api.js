@@ -2169,6 +2169,9 @@ var API = (function () {
                                                    : (vAll + aAll) + "个") +
                             "/并发2=" + (new Date().getTime() - tSidx0) + "ms" +
                             "（其中 " + reused + " 份沿用 web 清单的索引，没读）";
+                        /* Discover HDR independently of the background index
+                         * reads. Playback still requires the completed index. */
+                        dash.hdrCandidates = video.filter(function (r) { return r.id === 125; });
                         dash.video = video.filter(function (r) { return r.segments; });
                         dash.audio = audio.filter(function (r) { return r.segments; });
                         if (!dash.video.length || !dash.audio.length) {

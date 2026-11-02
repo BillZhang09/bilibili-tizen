@@ -114,7 +114,24 @@ await check('pause and resume issued after failure win across the serialized rel
 });
 await check('HDR failure preserves Atmos and enables SDR ABR without overwriting saved HDR preference',async()=>{
  const h=await playerHarness();h.c.Settings.set('preferredQn',125);await h.open(fixture(),{quality:125});
- h.partial(hdr().urls[0]);await h.jobs();assert.equal(h.c.Player.formatStatus().hdrFailed,true);assert.equal(h.c.Player.formatStatus().audio,'Dolby Atmos');assert.ok(h.c.Player.currentQuality()<125);assert.equal(h.abr(),true);assert.equal(h.c.Settings.qualityPreference(),125);assert.ok(!h.c.Player.qualityChoices(fixture()).includes(125));
+ h.partial(hdr().urls[0]);await h.jobs();assert.equal(h.c.Player.formatStatus().hdrFailed,true);assert.equal(h.c.Player.formatStatus().audio,'Dolby Atmos');assert.ok(h.c.Player.currentQuality()<125);assert.equal(h.abr(),true);assert.equal(h.c.Settings.qualityPreference(),125);assert.ok(h.c.Player.qualityChoices(fixture()).includes(125));
+});
+await check('HDR discovery survives pending indexes without adding unindexed media to a manifest',()=>{
+ const {Mpd:m}=context(),d={...fixture(),video:[v(80)],hdrCandidates:[{...hdr(),segments:null}]};
+ assert.equal(m.hasHdr(d),false);assert.equal(m.hasHdr(d,true),true);assert.ok(!m.build(d,125).includes('id="125"'));
+});
+await check('wrapped response-filter errors still recover only the failed audio',async()=>{
+ const h=await playerHarness();await h.open();
+ h.sdkListeners.get('error')({detail:{code:1007,severity:2,category:1,data:[{code:1002,severity:2,category:1,data:[dolby().urls[0],'short response']}]}});
+ await h.jobs();assert.equal(h.c.Player.formatStatus().audio,'AAC');assert.equal(h.c.Player.currentQuality(),125);
+});
+await check('a truncated ordinary web video escalates once to a strong token while retaining Atmos',async()=>{
+ const h=await playerHarness();await h.open(fixture(),{quality:80});const events=[];h.c.Player.on((kind,data)=>events.push({kind,data}));
+ let err;try{h.respFilters[0](1,{uri:v(80).urls[0],data:new ArrayBuffer(12),headers:{'content-range':'bytes 0-99/200'}},{biliGeneration:h.epoch()});}catch(e){err=e;}
+ assert.equal(err.biliIncomplete,true);h.sdkListeners.get('error')({detail:{code:1007,severity:2,category:1,data:[err]}});
+ assert.ok(events.some(e=>e.kind==='error'&&/web 流响应不完整/.test(e.data)));assert.equal(h.c.Player.formatStatus().atmosFailed,false);
+ assert.equal(h.c.Player.formatStatus().audio,'Dolby Atmos');
+ h.c.Player.pause();h.c.Player.stop({keepFormats:true,keepControls:true});assert.equal(h.c.Player.userPaused(),true);
 });
 await check('a web-token 403 reaches token recovery before disabling HDR',async()=>{
  const h=await playerHarness();await h.open();

@@ -227,7 +227,7 @@ context.Player={formatStatus:()=>({}),on:f=>eventHandler=f,qualityChoices:d=>d?M
 let appSource=source('app/js/app.js');
 appSource=appSource.replace('    window.onload = function () {',`    window.__controlsTest={
       session: function(s){playing=s;optionsOpen=true;toastEl=el('toast');return s;},
-      quality:changeQuality,
+      quality:changeQuality, downgrade:downgrade,
       paint:paintPlaybackControls, rollback:restoreQualityChange, ids:controlQualityIds,
       bind:bindPlaybackControls, closeChoices:closePlaybackChoices,
       pause:setPaused, end:function(){optionsOpen=false;beginAutoNext();},
@@ -365,5 +365,27 @@ await check('audio status follows the active track and clears while a new load i
  session({route:'dash'});context.Player.formatStatus=()=>({audio:'Dolby Atmos'});app.paint();assert.equal(node('playback-audio').textContent,'音频 Dolby Atmos');
  context.Player.formatStatus=()=>({audio:''});app.paint();assert.ok(node('playback-audio').className.includes('hidden'));
  context.Player.formatStatus=()=>({audio:'AAC',atmosFailed:true});app.paint();assert.match(node('playback-control-status').textContent,/已使用 AAC/);
+});
+await check('a failed HDR tier remains visible and cannot trigger another request',()=>{
+ session({route:'dash'});context.Player.qualityChoices=()=>[125,80,32];context.Player.formatStatus=()=>({hdrFailed:true,audio:'AAC'});
+ app.bind();node('panel-quality').onselect();
+ const html=node('playback-choices').innerHTML;assert.match(html,/aria-disabled="true" data-playback-choice="125">HDR10（本次播放不可用）/);
+ assert.doesNotMatch(html,/class="opt focusable[^>]+aria-disabled/);
+ dashReply=null;app.quality(125);assert.equal(dashReply,null);
+});
+await check('a short web video uses the controller strong-token path and keeps latest pause intent',()=>{
+ context.Player.formatStatus=()=>({});context.Player.startTiming=()=>{};context.Player.stop=o=>calls.push(['stop',o]);
+ context.Player.badFilesFor=()=>[];context.Player.learnStrong=()=>{};context.Player.pickDashVideo=d=>d.video[0];
+ let strong;context.API.playurlDashStrong=(aid,cid,cap,ok)=>strong={aid,cid,cap,ok};
+ const s=session({detail:{bvid:'BVTEST',aid:123},route:'dash',dashReady:{...dash}});
+ eventHandler('error','web 流响应不完整，交给 app 端点强令牌');assert.equal(s.triedStrong,true);assert.equal(strong.aid,123);
+ assert.equal(calls.find(c=>c[0]==='stop')[1].keepControls,true);strong.ok({...dash,strong:true});
+ assert.equal(calls.at(-1)[0],'dash');assert.equal(calls.at(-1)[3].paused,true);
+});
+await check('native fallback to DASH keeps the latest pause intent',()=>{
+ context.Player.learnRoute=()=>{};context.Player.pickDashVideo=d=>d.video[0];
+ session({route:'progressive',startMs:42000,dashReady:dash,quality:80});app.downgrade('refused');
+ assert.equal(calls.find(c=>c[0]==='stop')[1].keepControls,true);
+ assert.equal(calls.at(-1)[0],'dash');assert.equal(calls.at(-1)[3].paused,true);assert.equal(calls.at(-1)[2],42000);
 });
 console.log(`${count}/${count} playback control scenarios passed (controlled media, not device acceptance).`);

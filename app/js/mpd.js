@@ -225,7 +225,9 @@ var Mpd = (function () {
         topBandwidth: function () { return topBw; },
         hdrSupported: hdrSupported,
         audioSupported: audioSupported,
-        hasHdr: function (dash) { return hasHdr((dash || {}).video); },
+        hasHdr: function (dash, discovery) {
+            return hasHdr(((dash || {}).video || []).concat(discovery ? (dash || {}).hdrCandidates || [] : []), !!discovery);
+        },
         chosenHdr: function () { return chosenHdr; },
         chosenAudio: function () { return audioCodec; },
 

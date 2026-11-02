@@ -124,7 +124,7 @@ zsh tools/release.sh            # 给陌生人的发布包 → dist/
 切档保留进度、暂停状态和倍速。失败回滚保留最新的暂停或播放指令。
 
 HDR10 为 QN 125，仅在面板 API、Main10 解码和真实候选均支持时提供。候选发现独立于当前上限，预热和播放仍服从选择。HDR／SDR 跨组串行重建，成功后才保存 HDR 偏好并提高上限；缺档保持偏好，SDR 使用自动选档。HDR 选择优先准备强令牌，普通网页 403 仍交给既有令牌恢复。
-Atmos 默认优先，可在设置关闭；泛用 ec-3 不视为 Atmos。杜比轨须有 JOC 来源证明及准确采样率、声道信息，JOC 声明放在 Representation。AAC／E-AC-3 分组；响应长度与 Content-Range 不符时禁止写入 MSE，音频失败只退 AAC，视频失败只退 SDR。内部同视频拆除用 `Player.stop({ keepFormats: true })` 保留失败预算，新视频／退出清空。S85F 只通过选轨、保位和回退检查，最终音画与电视 HDR 状态仍未验收。→ `docs/HDR10-Atmos-适配验证.md`
+Atmos 默认优先，可在设置关闭；泛用 ec-3 不视为 Atmos。杜比轨须有 JOC 来源证明及准确采样率、声道信息，JOC 声明放在 Representation。AAC／E-AC-3 分组；响应长度与 Content-Range 不符时禁止写入 MSE，音频失败只退 AAC，视频失败只退 SDR。内部同视频拆除用 `Player.stop({ keepFormats: true })` 保留失败预算，新视频／退出清空。S85F 已确认电视 Gamma 为 ST.2084，以及约 150 秒真实 Atmos 持续有声同步；真实 HDR＋Atmos 组合未通过，HDR 长测仍保留无进展回退记录。HDR 候选与索引分开，失败后菜单保留但不可重复选；响应过滤的 1007 要解开内层错误，普通视频短响应先转强令牌并保留音轨。内部同视频重建同时使用 `keepControls` 并传递最新暂停状态。→ `docs/HDR10-Atmos-适配验证.md`
 
 
 ## 约定
