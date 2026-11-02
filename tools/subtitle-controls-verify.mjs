@@ -51,7 +51,7 @@ await check('subtitle language validates and survives a new settings instance',(
  const fresh=vm.createContext({localStorage:storage});vm.runInContext(source('app/js/settings.js'),fresh);
  assert.equal(fresh.Settings.subtitleLanguage(),'en');
 });
-context.Player={on(){}};
+context.Player={on(){},currentQuality:()=>0,qualityChoices:()=>[]};
 let appSource=source('app/js/app.js');
 appSource=appSource.replace('    window.onload = function () {',`    window.__controlsTest={
  session:function(s){playing=s;optionsOpen=true;toastEl=el('toast');return s;},
