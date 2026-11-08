@@ -1,0 +1,1587 @@
+{
+  "checked_at": "2026-11-01T21:32:30.563453+08:00",
+  "analysis_kind": "static-only; no app execution or authenticated API calls",
+  "apk": {
+    "name": "iBiliTV-master.apk",
+    "version": "1.8.9",
+    "version_code": 108900,
+    "sha256": "73229ae195f45cdbfd4577b81962a4b4c9345a36abcd846e00dbc0647c127ef2"
+  },
+  "tool": {
+    "name": "JADX",
+    "version": "1.5.6",
+    "download": "https://github.com/skylot/jadx/releases/download/v1.5.6/jadx-1.5.6.zip",
+    "sha256": "545ea2be9c242511bc145755cf4bda2485ade42966e096f8b4d3da2a230e8974",
+    "full_run_exit_code": 3,
+    "reported_error_count": 140
+  },
+  "temporary_analysis_directory": "/private/tmp/bili-tv-static-wd9hxul1",
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "菜单加载优先级",
+      "source": "com/xiaodianshi/tv/yst/player/menu/v2/MenuV2Manager.java",
+      "source_sha256": "928ffb67f77653a8359990652bdc85582a3cd2a4f575e88f60e9097dcde5e107",
+      "excerpts": [
+        {
+          "start_line": 270,
+          "end_line": 296,
+          "text": "            kotlin.Result.Companion companion = p001kotlin.Result.Companion;\n            com.bilibili.lib.config.BLConfigManager bLConfigManager = com.bilibili.lib.config.BLConfigManager.INSTANCE;\n            p001kotlin.Unit unit = null;\n            int intLatency$default = com.bilibili.lib.config.BLConfigManager.getIntLatency$default(bLConfigManager, \"is_menu_use_remote_config\", 0, 2, null);\n            int intLatency$default2 = com.bilibili.lib.config.BLConfigManager.getIntLatency$default(bLConfigManager, \"is_menu_use_api\", 0, 2, null);\n            tv.danmaku.android.log.BLog.i(TAG, \"initLocalData useConfig = \" + intLatency$default + \", useApi = \" + intLatency$default2);\n            if (z && intLatency$default2 == 1) {\n                if (context == null) {\n                    context = com.bilibili.lib.foundation.FoundationAlias.getFapp();\n                }\n                tv.danmaku.android.log.BLog.i(TAG, \"initLocalData getMenuList, tempCtx = \" + context);\n                b(context);\n                return;\n            }\n            if (intLatency$default == 1 && (str = (java.lang.String) com.bilibili.lib.blconfig.Contract.DefaultImpls.get$default(com.bilibili.lib.blconfig.ConfigManager.INSTANCE.config(), \"yst.default_menu_from_remote_config\", null, 2, null)) != null) {\n                if (str.length() > 0) {\n                    a = com.alibaba.fastjson.JSON.parseArray(str, com.xiaodianshi.tv.yst.player.menu.v2.MenuDataV2.class);\n                    tv.danmaku.android.log.BLog.i(TAG, \"initLocalData useConfig jsonStr not null\");\n                    return;\n                }\n            }\n            if (context != null) {\n                tv.danmaku.android.log.BLog.i(TAG, \"initLocalData by local menu_v2_default.json\");\n                java.io.InputStream inputStreamOpen = context.getAssets().open(\"menu_v2_default.json\");\n                p001kotlin.jvm.internal.Intrinsics.checkNotNullExpressionValue(inputStreamOpen, \"open(...)\");\n                java.io.Reader inputStreamReader = new java.io.InputStreamReader(inputStreamOpen, p001kotlin.text.Charsets.UTF_8);\n                java.io.BufferedReader bufferedReader = inputStreamReader instanceof java.io.BufferedReader ? (java.io.BufferedReader) inputStreamReader : new java.io.BufferedReader(inputStreamReader, 8192);"
+        },
+        {
+          "start_line": 209,
+          "end_line": 221,
+          "text": "        public void onSuccess2(@org.jetbrains.annotations.Nullable com.bilibili.okretro.GeneralResponse<java.util.List<com.xiaodianshi.tv.yst.player.menu.v2.MenuDataV2>> generalResponse) {\n            com.xiaodianshi.tv.yst.player.menu.v2.MenuV2Manager.access$isMenuRequesting$p().set(false);\n            java.util.List<com.xiaodianshi.tv.yst.player.menu.v2.MenuDataV2> list = generalResponse != null ? generalResponse.data : null;\n            if (list == null || list.isEmpty()) {\n                tv.danmaku.android.log.BLog.i(com.xiaodianshi.tv.yst.player.menu.v2.MenuV2Manager.TAG, \"get menu list returned empty data, hasRetry=\" + com.xiaodianshi.tv.yst.player.menu.v2.MenuV2Manager.access$getHasRetry$p());\n                b();\n                return;\n            }\n            com.xiaodianshi.tv.yst.player.menu.v2.MenuV2Manager menuV2Manager = com.xiaodianshi.tv.yst.player.menu.v2.MenuV2Manager.INSTANCE;\n            menuV2Manager.setMenuList(list);\n            menuV2Manager.setHasAssignedByApi(true);\n            com.xiaodianshi.tv.yst.util.EventBusUtil.INSTANCE.sendNormalEvent(new com.xiaodianshi.tv.yst.util.MessageEvent(\"10060\", null, 2, null));\n            java.lang.StringBuilder sb = new java.lang.StringBuilder();"
+        }
+      ]
+    },
+    {
+      "id": "E02",
+      "title": "首页按键委派",
+      "source": "com/xiaodianshi/tv/yst/ui/main/MainActivity.java",
+      "source_sha256": "cb67bf6b03c218011a0367fe113eef16773573a57b667da194f54a13c6e9ad74",
+      "excerpts": [
+        {
+          "start_line": 1887,
+          "end_line": 1913,
+          "text": "        }\n        int keyCode = keyEvent.getKeyCode();\n        int action = keyEvent.getAction();\n        this.q = -1;\n        androidx.fragment.app.Fragment fragmentFindFragmentByTag = getSupportFragmentManager().findFragmentByTag(this.Q);\n        if (fragmentFindFragmentByTag instanceof com.xiaodianshi.tv.yst.ui.main.splash.SplashFragment) {\n            com.xiaodianshi.tv.yst.ui.main.splash.SplashFragment splashFragment = (com.xiaodianshi.tv.yst.ui.main.splash.SplashFragment) fragmentFindFragmentByTag;\n            if (splashFragment.isVisible()) {\n                return splashFragment.onKeyDown(keyCode, keyEvent);\n            }\n        }\n        com.xiaodianshi.tv.yst.ad.IAdBiz companion = com.xiaodianshi.tv.yst.ad.IAdBiz.Companion.getInstance();\n        boolean zRequestFocus = false;\n        if (companion != null && companion.dispatchKeyEvent(keyEvent)) {\n            return true;\n        }\n        com.xiaodianshi.tv.yst.ui.main.MainFragment mainFragment = this.G;\n        java.lang.Object objJ = (mainFragment == null || (mainFragmentAdapterN1 = mainFragment.N1()) == null) ? null : mainFragmentAdapterN1.j();\n        android.view.View currentFocus = getCurrentFocus();\n        com.xiaodianshi.tv.yst.ui.main.MainFragment mainFragment2 = this.G;\n        if ((mainFragment2 == null || (topBubbleFragmentY1 = mainFragment2.Y1()) == null || !topBubbleFragmentY1.delegateKeyEvent(keyEvent)) ? false : true) {\n            return true;\n        }\n        boolean z2 = objJ instanceof com.xiaodianshi.tv.yst.ui.main.content.IMainPagerFragment;\n        if (z2 && ((com.xiaodianshi.tv.yst.ui.main.content.IMainPagerFragment) objJ).dispatchKeyEvent(keyEvent, currentFocus)) {\n            return true;\n        }"
+        },
+        {
+          "start_line": 1933,
+          "end_line": 1953,
+          "text": "                            this.U = 0;\n                        }\n                    }\n                }\n            }\n        } else {\n            if (keyCode == 4 || keyCode == 8) {\n                com.xiaodianshi.tv.yst.support.TvToastHelper.INSTANCE.cancel();\n                com.xiaodianshi.tv.yst.ui.main.MainFragment mainFragment4 = this.G;\n                if (mainFragment4 != null && !mainFragment4.e2()) {\n                    zRequestFocus = true;\n                }\n                if (!zRequestFocus) {\n                    return super.dispatchKeyEvent(keyEvent);\n                }\n                com.xiaodianshi.tv.yst.ui.main.content.IMainPagerFragment iMainPagerFragment3 = z2 ? (com.xiaodianshi.tv.yst.ui.main.content.IMainPagerFragment) objJ : null;\n                if (iMainPagerFragment3 != null) {\n                    iMainPagerFragment3.go2Top();\n                }\n                return true;\n            }"
+        },
+        {
+          "start_line": 1963,
+          "end_line": 1991,
+          "text": "                    V1(currentFocus);\n                    return true;\n                }\n                if (p001kotlin.jvm.internal.Intrinsics.areEqual(currentFocus != null ? currentFocus.getTag() : null, \"region-management\")) {\n                    V1(currentFocus);\n                    return true;\n                }\n            } else if (keyCode == 20) {\n                com.xiaodianshi.tv.yst.ui.main.MainFragment mainFragment6 = this.G;\n                if (!(mainFragment6 != null && mainFragment6.e2())) {\n                    com.xiaodianshi.tv.yst.ui.main.MainFragment mainFragment7 = this.G;\n                    if (mainFragment7 != null && mainFragment7.f2()) {\n                        zRequestFocus = true;\n                    }\n                    if (zRequestFocus) {\n                        go2Title();\n                        return true;\n                    }\n                    if (p001kotlin.jvm.internal.Intrinsics.areEqual(currentFocus != null ? currentFocus.getTag() : null, \"region-management\")) {\n                        com.xiaodianshi.tv.yst.util.shake.ViewShakable.DefaultImpls.shake$default(com.xiaodianshi.tv.yst.util.shake.ViewShakable.Companion.get(), currentFocus.findViewById(com.xiaodianshi.tv.yst.R.id.llRegionManageContainer), true, 0.0f, 0L, 12, null);\n                        return true;\n                    }\n                } else if (z2) {\n                    android.view.View requestFocus = ((com.xiaodianshi.tv.yst.ui.main.content.IMainPagerFragment) objJ).getRequestFocus();\n                    if (requestFocus != null) {\n                        setInterceptItemViewSelected();\n                        if (currentFocus != null) {\n                            currentFocus.setFocusable(false);\n                        }"
+        }
+      ]
+    },
+    {
+      "id": "E03",
+      "title": "首页焦点区域判定",
+      "source": "com/xiaodianshi/tv/yst/ui/main/MainFragment.java",
+      "source_sha256": "992c25008a73b01f11750c3921a08be8281be914563e33aa2b90439342b71e4b",
+      "excerpts": [
+        {
+          "start_line": 1344,
+          "end_line": 1360,
+          "text": "    public final boolean e2() {\n        android.view.View viewFindFocus;\n        com.xiaodianshi.tv.yst.widget.indicator.MagicIndicator magicIndicator = this.a;\n        if (magicIndicator != null && magicIndicator.hasFocus()) {\n            com.xiaodianshi.tv.yst.widget.indicator.MagicIndicator magicIndicator2 = this.a;\n            if (!p001kotlin.jvm.internal.Intrinsics.areEqual((magicIndicator2 == null || (viewFindFocus = magicIndicator2.findFocus()) == null) ? null : viewFindFocus.getTag(), \"region-management\")) {\n                return true;\n            }\n        }\n        return false;\n    }\n\n    public final boolean f2() {\n        android.view.View view;\n        com.xiaodianshi.tv.yst.topbar.view.TopBubbleFragment topBubbleFragment = this.G;\n        return com.yst.lib.util.YstNonNullsKt.orFalse((topBubbleFragment == null || (view = topBubbleFragment.getView()) == null) ? null : java.lang.Boolean.valueOf(view.hasFocus()));\n    }"
+        }
+      ]
+    },
+    {
+      "id": "E04",
+      "title": "搜索返回分支",
+      "source": "com/xiaodianshi/tv/yst/ui/search/SearchActivity.java",
+      "source_sha256": "0edf996e5da4cd5b8c730ab0df03b7128999733394aefd7c3f64031f7e75bc96",
+      "excerpts": [
+        {
+          "start_line": 486,
+          "end_line": 498,
+          "text": "            } else if (numValueOf2 != null && numValueOf2.intValue() == 4) {\n                com.xiaodianshi.tv.yst.ui.search.f fVar = this.k;\n                if (p001kotlin.jvm.internal.Intrinsics.areEqual(fVar, this.j)) {\n                    this.z = false;\n                    com.xiaodianshi.tv.yst.ui.search.f fVar2 = this.k;\n                    java.lang.Boolean boolDispatchKeyEvent = fVar2 != null ? fVar2.dispatchKeyEvent(keyEvent, currentFocus) : null;\n                    zBooleanValue = boolDispatchKeyEvent != null ? boolDispatchKeyEvent.booleanValue() : false;\n                    if (zBooleanValue) {\n                        return zBooleanValue;\n                    }\n                    A(true);\n                    return true;\n                }"
+        },
+        {
+          "start_line": 534,
+          "end_line": 540,
+          "text": "                if (p001kotlin.jvm.internal.Intrinsics.areEqual(fVar, this.a)) {\n                    this.z = false;\n                    com.xiaodianshi.tv.yst.ui.search.SearchKeyboardView searchKeyboardView7 = this.a;\n                    if (java.lang.String.valueOf((searchKeyboardView7 == null || (searchText = searchKeyboardView7.getSearchText()) == null) ? null : searchText.getText()).length() > 0) {\n                        C0();\n                        return true;\n                    }"
+        },
+        {
+          "start_line": 1180,
+          "end_line": 1209,
+          "text": "    public boolean s() {\n        if (this.n) {\n            return false;\n        }\n        com.xiaodianshi.tv.yst.ui.search.f fVar = this.k;\n        if (fVar == this.a) {\n            com.xiaodianshi.tv.yst.ui.search.SearchDefaultFragment searchDefaultFragment = this.i;\n            if (searchDefaultFragment != null && searchDefaultFragment.P1()) {\n                B0(this, this.i, false, 2, null);\n                return true;\n            }\n        } else {\n            com.xiaodianshi.tv.yst.ui.search.SearchDefaultFragment searchDefaultFragment2 = this.i;\n            if (fVar == searchDefaultFragment2) {\n                if (searchDefaultFragment2 != null && searchDefaultFragment2.a2()) {\n                    if (this.q) {\n                        this.r = true;\n                        return true;\n                    }\n                    com.xiaodianshi.tv.yst.ui.search.my.SearchResultHostFragment searchResultHostFragment = this.j;\n                    if (searchResultHostFragment == null) {\n                        return false;\n                    }\n                    if (searchResultHostFragment.U3()) {\n                        com.xiaodianshi.tv.yst.ui.search.SearchDefaultFragment searchDefaultFragment3 = this.i;\n                        if (searchDefaultFragment3 != null) {\n                            searchDefaultFragment3.R1();\n                        }\n                        B0(this, searchResultHostFragment, false, 2, null);\n                    }"
+        }
+      ]
+    },
+    {
+      "id": "E05",
+      "title": "搜索清空输入与系统输入法",
+      "source": "com/xiaodianshi/tv/yst/ui/search/SearchKeyboardView.java",
+      "source_sha256": "92a5aa80ec6b44f53b2a5b42b04b8db5297b3a56d11f91c7328cfc1d1b63b0e7",
+      "excerpts": [
+        {
+          "start_line": 822,
+          "end_line": 832,
+          "text": "    public final void t() {\n        android.content.Context context = getContext();\n        android.app.Activity activityA = context != null ? kotlin.g81.a(context) : null;\n        com.xiaodianshi.tv.yst.ui.search.SearchActivity searchActivity = activityA instanceof com.xiaodianshi.tv.yst.ui.search.SearchActivity ? (com.xiaodianshi.tv.yst.ui.search.SearchActivity) activityA : null;\n        if (searchActivity != null) {\n            searchActivity.Z();\n        }\n        android.widget.EditText editText = this.i;\n        if (editText != null) {\n            editText.setText(\"\");\n        }"
+        },
+        {
+          "start_line": 983,
+          "end_line": 988,
+          "text": "        private static final void i(com.xiaodianshi.tv.yst.ui.search.SearchKeyboardView this$0, com.xiaodianshi.tv.yst.ui.search.SearchKeyboardView.f this$1, android.view.View view) {\n            p001kotlin.jvm.internal.Intrinsics.checkNotNullParameter(this$0, \"this$0\");\n            p001kotlin.jvm.internal.Intrinsics.checkNotNullParameter(this$1, \"this$1\");\n            this$0.I();\n            com.xiaodianshi.tv.yst.report.NeuronReportHelper.reportClick$default(com.xiaodianshi.tv.yst.report.NeuronReportHelper.INSTANCE, \"ott-platform.ott-search.keyboard.system-keyboard.click\", (p001kotlin.jvm.functions.Function1) null, 2, (java.lang.Object) null);\n            this$1.j();"
+        }
+      ]
+    },
+    {
+      "id": "E06",
+      "title": "播放器按键优先级和换片回退",
+      "source": "com/xiaodianshi/tv/yst/player/compatible/PlayerKeyEventDelegate.java",
+      "source_sha256": "f595e9cd3a5df42fe7e9c0ede837864e4a73aa27c07ec5cd4611e77f1ffa1f97",
+      "excerpts": [
+        {
+          "start_line": 566,
+          "end_line": 627,
+          "text": "        if (keyEvent == null || keyEvent.getAction() == 1) {\n            this.c = true;\n        }\n        if (keyEvent == null) {\n            return false;\n        }\n        if (isDynamicInteractShowing() || isChronosInteractShowing()) {\n            if (!this.a.inFullPlay()) {\n                return false;\n            }\n        } else {\n            if (tripleHandleKey(keyEvent, num)) {\n                return true;\n            }\n            if (!this.a.inFullPlay()) {\n                return false;\n            }\n            if (tripleConnectIsShowing(2)) {\n                this.e = true;\n                return true;\n            }\n        }\n        java.lang.Boolean boolF = f(keyEvent);\n        tv.danmaku.android.log.BLog.d(TAG, \"playerHandleKey \" + boolF);\n        if (p001kotlin.jvm.internal.Intrinsics.areEqual(boolF, java.lang.Boolean.TRUE)) {\n            return true;\n        }\n        if (z) {\n            return false;\n        }\n        int keyCode = keyEvent.getKeyCode();\n        if (keyCode != 19) {\n            if (keyCode != 20) {\n                return false;\n            }\n            if (keyEvent.getAction() == 0) {\n                tv.danmaku.android.log.BLog.e(TAG, \"ACTION_DOWN\");\n                if (this.c) {\n                    switchNext(businessPerfParams);\n                }\n                this.c = false;\n                return true;\n            }\n            if (keyEvent.getAction() == 1) {\n                tv.danmaku.android.log.BLog.e(TAG, \"ACTION_UP\");\n            }\n        } else {\n            if (keyEvent.getAction() == 0) {\n                tv.danmaku.android.log.BLog.e(TAG, \"ACTION_DOWN\");\n                if (this.c) {\n                    switchPrev(businessPerfParams);\n                }\n                this.c = false;\n                return true;\n            }\n            if (keyEvent.getAction() == 1) {\n                tv.danmaku.android.log.BLog.e(TAG, \"ACTION_UP\");\n            }\n        }\n        return false;\n    }\n"
+        }
+      ]
+    },
+    {
+      "id": "E07",
+      "title": "长按确认分组与动作",
+      "source": "com/xiaodianshi/tv/yst/player/compatible/PlayerKeyEventDelegate.java",
+      "source_sha256": "f595e9cd3a5df42fe7e9c0ede837864e4a73aa27c07ec5cd4611e77f1ffa1f97",
+      "excerpts": [
+        {
+          "start_line": 306,
+          "end_line": 325,
+          "text": "        com.xiaodianshi.tv.yst.player.facade.ICompatiblePlayer compactPlayer3 = this$0.a.getCompactPlayer();\n        boolean z2 = compactPlayer3 != null && compactPlayer3.isPlaying();\n        com.xiaodianshi.tv.yst.player.facade.ICompatiblePlayer compactPlayer4 = this$0.a.getCompactPlayer();\n        if (compactPlayer4 != null && compactPlayer4.isControllerShowing()) {\n            z = true;\n        }\n        if (!z2 || z) {\n            return;\n        }\n        if (zIsLongPressOkExcluded) {\n            if (this$0.d()) {\n                this$0.k();\n            }\n        } else if (!this$0.d()) {\n            this$0.j();\n        } else if (com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.Companion.getLongPressOkAction(com.bilibili.lib.foundation.FoundationAlias.getFapp()) == 2) {\n            this$0.j();\n        } else {\n            this$0.k();\n        }"
+        },
+        {
+          "start_line": 755,
+          "end_line": 783,
+          "text": "    public final boolean tripleHandleKey(@org.jetbrains.annotations.NotNull android.view.KeyEvent event, @org.jetbrains.annotations.Nullable java.lang.Integer num) {\n        p001kotlin.jvm.internal.Intrinsics.checkNotNullParameter(event, \"event\");\n        this.g = num;\n        int keyCode = event.getKeyCode();\n        if (keyCode != 23 && keyCode != 66 && keyCode != 160) {\n            if (event.getAction() == 1 && (event.getKeyCode() == 4 || event.getKeyCode() == 111)) {\n                l(\"2\");\n            }\n            return false;\n        }\n        if (event.getAction() == 0) {\n            if (!this.f) {\n                this.f = true;\n                com.bilibili.base.util.HandlerThreads.getHandler(0).removeCallbacks(this.m);\n                com.bilibili.base.util.HandlerThreads.getHandler(0).postDelayed(this.m, android.view.ViewConfiguration.getLongPressTimeout());\n            }\n        } else if (event.getAction() == 1) {\n            l(\"1\");\n            if (this.f) {\n                this.f = false;\n                com.bilibili.base.util.HandlerThreads.getHandler(0).removeCallbacks(this.m);\n            }\n            this.f = false;\n            if (this.e) {\n                this.e = false;\n                return true;\n            }\n        }\n        return false;"
+        }
+      ]
+    },
+    {
+      "id": "E08",
+      "title": "临时二倍速及恢复",
+      "source": "com/xiaodianshi/tv/yst/player/compatible/PlayerKeyEventDelegate.java",
+      "source_sha256": "f595e9cd3a5df42fe7e9c0ede837864e4a73aa27c07ec5cd4611e77f1ffa1f97",
+      "excerpts": [
+        {
+          "start_line": 417,
+          "end_line": 445,
+          "text": "        java.lang.Float f = (fValueOf.floatValue() > 0.0f ? 1 : (fValueOf.floatValue() == 0.0f ? 0 : -1)) > 0 ? fValueOf : null;\n        this.j = f != null ? f.floatValue() : 1.0f;\n        player.setSpeed(2.0f, false);\n        this.i = true;\n        this.l = android.os.SystemClock.elapsedRealtime();\n        this.e = true;\n        i(activity);\n        h();\n        tv.danmaku.android.log.BLog.d(TAG, \"startLongPressSpeed: savedSpeed=\" + this.j + \", targetSpeed=2.0\");\n    }\n\n    private final void l(java.lang.String str) {\n        if (this.i) {\n            com.xiaodianshi.tv.yst.player.facade.ICompatiblePlayer compactPlayer = this.a.getCompactPlayer();\n            android.content.Context playerContext = compactPlayer != null ? compactPlayer.getPlayerContext() : null;\n            android.app.Activity activity = playerContext instanceof android.app.Activity ? (android.app.Activity) playerContext : null;\n            com.xiaodianshi.tv.yst.player.base.IPlayerController player = activity != null ? com.xiaodianshi.tv.yst.player.facade.PlayerGetter.INSTANCE.getPlayer(activity) : null;\n            if (player != null) {\n                player.setSpeed(this.j, false);\n            }\n            this.i = false;\n            c();\n            if (!(str == null || str.length() == 0)) {\n                g(str);\n            }\n            if (p001kotlin.jvm.internal.Intrinsics.areEqual(str, \"1\")) {\n                n();\n            }\n            tv.danmaku.android.log.BLog.d(TAG, \"stopLongPressSpeed: restored to \" + this.j);"
+        }
+      ]
+    },
+    {
+      "id": "E09",
+      "title": "长按动作偏好",
+      "source": "com/xiaodianshi/tv/yst/preference/TvPreferenceHelper.java",
+      "source_sha256": "0622a63b515c07c07bbeca932ad4e78d01139be5d2fc4b3585f6f0555c8dc287",
+      "excerpts": [
+        {
+          "start_line": 525,
+          "end_line": 534,
+          "text": "        public final int getLongPressOkAction(@org.jetbrains.annotations.Nullable android.content.Context context) {\n            android.content.SharedPreferences preferencesCommon;\n            if (com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.access$getSLongPressOkAction$cp() == -1 && context != null) {\n                com.xiaodianshi.tv.yst.preference.TvPreferenceHelper companion = getInstance(context);\n                com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.access$setSLongPressOkAction$cp(((companion == null || (preferencesCommon = companion.getPreferencesCommon()) == null) ? 1 : preferencesCommon.getInt(\"long_press_ok_action\", 1)) != 2 ? 1 : 2);\n            }\n            if (com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.access$getSLongPressOkAction$cp() == -1) {\n                return 1;\n            }\n            return com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.access$getSLongPressOkAction$cp();"
+        },
+        {
+          "start_line": 1633,
+          "end_line": 1643,
+          "text": "        public final void setLongPressOkAction(@org.jetbrains.annotations.Nullable android.content.Context context, int i) {\n            android.content.SharedPreferences preferencesCommon;\n            android.content.SharedPreferences.Editor editorEdit;\n            android.content.SharedPreferences.Editor editorPutInt;\n            if ((i == 1 || i == 2) && context != null) {\n                com.xiaodianshi.tv.yst.preference.TvPreferenceHelper companion = getInstance(context);\n                if (companion != null && (preferencesCommon = companion.getPreferencesCommon()) != null && (editorEdit = preferencesCommon.edit()) != null && (editorPutInt = editorEdit.putInt(\"long_press_ok_action\", i)) != null) {\n                    editorPutInt.apply();\n                }\n                com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.access$setSLongPressOkAction$cp(i);\n            }"
+        }
+      ]
+    },
+    {
+      "id": "E10",
+      "title": "长按菜单选项映射",
+      "source": "com/xiaodianshi/tv/yst/video/ui/menudata/LongPressOkMenuData.java",
+      "source_sha256": "017eaea4e6615e96afd669afac7103ecff83fa14384494da66c17c8007009dff",
+      "excerpts": [
+        {
+          "start_line": 20,
+          "end_line": 24,
+          "text": "        public final int a(@org.jetbrains.annotations.Nullable java.lang.String str) {\n            if (p001kotlin.jvm.internal.Intrinsics.areEqual(str, \"5801\")) {\n                return 1;\n            }\n            return p001kotlin.jvm.internal.Intrinsics.areEqual(str, \"5802\") ? 2 : 0;"
+        },
+        {
+          "start_line": 58,
+          "end_line": 75,
+          "text": "        com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.Companion companion = com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.Companion;\n        tv.danmaku.biliplayerv2.PlayerContainer playerContainerE = e();\n        int longPressOkAction = companion.getLongPressOkAction(playerContainerE != null ? playerContainerE.getContext() : null);\n        s(0);\n        r(\"\");\n        if (arrayList != null) {\n            for (java.lang.Object obj2 : arrayList) {\n                int i2 = i + 1;\n                if (i < 0) {\n                    p001kotlin.collections.CollectionsKt.throwIndexOverflow();\n                }\n                com.xiaodianshi.tv.yst.player.menu.v2.SubMenu subMenu2 = (com.xiaodianshi.tv.yst.player.menu.v2.SubMenu) obj2;\n                if (Companion.a(subMenu2.type) == longPressOkAction) {\n                    s(i);\n                    r(subMenu2.name);\n                }\n                i = i2;\n            }"
+        }
+      ]
+    },
+    {
+      "id": "E11",
+      "title": "设置面板返回与弹幕入口过滤",
+      "source": "com/xiaodianshi/tv/yst/player/menu/v3/MenuSettingWidgetForDecoupling.java",
+      "source_sha256": "78d339edc3b6af6d95b72dbca95e520043824ad3bd8d03200d37b37276837a8e",
+      "excerpts": [
+        {
+          "start_line": 330,
+          "end_line": 337,
+          "text": "        com.xiaodianshi.tv.yst.player.feature.menu.InteractionDolbyLiveData interactionDolbyLiveData = com.xiaodianshi.tv.yst.player.feature.menu.InteractionDolbyLiveData.getInstance();\n        if (interactionDolbyLiveData != null && (value = interactionDolbyLiveData.getValue()) != null) {\n            boolValueOf = java.lang.Boolean.valueOf(value.danmukuButton);\n        }\n        if (!p001kotlin.jvm.internal.Intrinsics.areEqual(boolValueOf, java.lang.Boolean.TRUE)) {\n            tv.danmaku.android.log.BLog.i(getTag(), \"danmaku btnShow != true, hide danmaku setting panel entry\");\n            p001kotlin.collections.CollectionsKt.removeAll(mutableList, (p001kotlin.jvm.functions.Function1) com.xiaodianshi.tv.yst.player.menu.v3.MenuSettingWidgetForDecoupling.b.INSTANCE);\n        }"
+        },
+        {
+          "start_line": 1163,
+          "end_line": 1205,
+          "text": "        if (viewGroup == null || !isShowing() || !p001kotlin.collections.CollectionsKt.listOf((java.lang.Object[]) new java.lang.Integer[]{4, 111, 66, java.lang.Integer.valueOf(com.bapis.bcg.sunspot.ad.dto.AdRequestDto.ACC_TAG_WEIGHT_NAME_FIELD_NUMBER), 23, 85, 21, 22, 19, 20}).contains(java.lang.Integer.valueOf(i))) {\n            return false;\n        }\n        if (event.getAction() != 1) {\n            return true;\n        }\n        if (p001kotlin.collections.CollectionsKt.listOf((java.lang.Object[]) new java.lang.Integer[]{4, 111}).contains(java.lang.Integer.valueOf(i))) {\n            if (D()) {\n                com.xiaodianshi.tv.yst.player.menu.danmaku_setting.DanmakuSettingView danmakuSettingView2 = this.l;\n                if (danmakuSettingView2 != null) {\n                    com.yst.lib.util.YstViewsKt.setVisible(danmakuSettingView2, false);\n                }\n                if (this.w == 1 && (recyclerView = this.j) != null) {\n                    com.yst.lib.util.YstViewsKt.setVisible(recyclerView, true);\n                }\n                android.widget.TextView textView = this.i;\n                if (textView != null) {\n                    com.yst.lib.util.YstViewsKt.setVisible(textView, true);\n                }\n                U();\n                return true;\n            }\n            if (!H() || !y()) {\n                return !G() && y();\n            }\n            com.xiaodianshi.tv.yst.video.unite.k kVar2 = (com.xiaodianshi.tv.yst.video.unite.k) this.g.getService();\n            if (kVar2 != null) {\n                kVar2.q(false);\n            }\n            androidx.recyclerview.widget.RecyclerView recyclerView2 = this.k;\n            if (recyclerView2 != null) {\n                recyclerView2.setVisibility(8);\n            }\n            androidx.recyclerview.widget.RecyclerView recyclerView3 = this.j;\n            if (recyclerView3 != null) {\n                recyclerView3.setVisibility(0);\n            }\n            android.widget.TextView textView2 = this.i;\n            if (textView2 != null) {\n                textView2.setText(this.s);\n            }\n            U();\n            return true;"
+        }
+      ]
+    },
+    {
+      "id": "E12",
+      "title": "播放策略选择与持久化",
+      "source": "kotlin/ut3.java",
+      "source_sha256": "fc79c262fbe22f07b211b76466de8e8832fc0da3d9dba9dc194aaef3e1bc06f2",
+      "excerpts": [
+        {
+          "start_line": 17,
+          "end_line": 21,
+          "text": "        java.util.HashMap<java.lang.String, java.lang.Integer> map = new java.util.HashMap<>();\n        this.m = map;\n        map.put(\"2501\", 0);\n        map.put(\"2502\", 1);\n        map.put(\"2503\", 2);"
+        },
+        {
+          "start_line": 98,
+          "end_line": 120,
+          "text": "    public void s(@org.jetbrains.annotations.NotNull android.view.View itemView, int i) {\n        p001kotlin.jvm.internal.Intrinsics.checkNotNullParameter(itemView, \"itemView\");\n        java.util.List listN = kotlin.h03.n(z(), false, 1, null);\n        com.xiaodianshi.tv.yst.player.menu.v2.SubMenu subMenu = listN != null ? (com.xiaodianshi.tv.yst.player.menu.v2.SubMenu) listN.get(i) : null;\n        p001kotlin.jvm.internal.Intrinsics.checkNotNull(subMenu);\n        android.content.Context context = itemView.getContext();\n        p001kotlin.jvm.internal.Intrinsics.checkNotNull(context);\n        com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.Companion companion = com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.Companion;\n        int playLoopStrategy = companion.getPlayLoopStrategy(context);\n        if (this.m.containsKey(subMenu != null ? subMenu.type : null)) {\n            java.lang.Integer num = this.m.get(subMenu.type);\n            if (num != null && num.intValue() == playLoopStrategy) {\n                return;\n            }\n            z().s(i);\n            z().o(i);\n            l();\n            java.lang.Integer num2 = this.m.get(subMenu.type);\n            if (num2 == null) {\n                num2 = 0;\n            }\n            companion.setPlayLoopStrategy(context, num2.intValue());\n            K();"
+        }
+      ]
+    },
+    {
+      "id": "E13",
+      "title": "播放策略偏好读写",
+      "source": "com/xiaodianshi/tv/yst/preference/TvPreferenceHelper.java",
+      "source_sha256": "0622a63b515c07c07bbeca932ad4e78d01139be5d2fc4b3585f6f0555c8dc287",
+      "excerpts": [
+        {
+          "start_line": 584,
+          "end_line": 598,
+          "text": "        public final int getPlayLoopStrategy(@org.jetbrains.annotations.Nullable android.content.Context context) {\n            android.content.SharedPreferences preferencesCommon;\n            int i = 0;\n            if (context == null) {\n                return 0;\n            }\n            if (com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.access$getPlayLoopStrategy$cp() != -1) {\n                return com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.access$getPlayLoopStrategy$cp();\n            }\n            com.xiaodianshi.tv.yst.preference.TvPreferenceHelper companion = getInstance(context);\n            if (companion != null && (preferencesCommon = companion.getPreferencesCommon()) != null) {\n                i = preferencesCommon.getInt(\"play_loop_strategy\", 0);\n            }\n            com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.access$setPlayLoopStrategy$cp(i);\n            return com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.access$getPlayLoopStrategy$cp();"
+        },
+        {
+          "start_line": 1749,
+          "end_line": 1760,
+          "text": "        public final void setPlayLoopStrategy(@org.jetbrains.annotations.Nullable android.content.Context context, int i) {\n            android.content.SharedPreferences preferencesCommon;\n            android.content.SharedPreferences.Editor editorEdit;\n            android.content.SharedPreferences.Editor editorPutInt;\n            if (context == null) {\n                return;\n            }\n            com.xiaodianshi.tv.yst.preference.TvPreferenceHelper companion = getInstance(context);\n            if (companion != null && (preferencesCommon = companion.getPreferencesCommon()) != null && (editorEdit = preferencesCommon.edit()) != null && (editorPutInt = editorEdit.putInt(\"play_loop_strategy\", i)) != null) {\n                editorPutInt.apply();\n            }\n            com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.access$setPlayLoopStrategy$cp(i);"
+        }
+      ]
+    },
+    {
+      "id": "E14",
+      "title": "画质偏好与切换",
+      "source": "com/xiaodianshi/tv/yst/player/quality/PlayerQualityService.java",
+      "source_sha256": "b709348fbaaecc423cb76ff2e645a1732448c9426696c3bd9d6aa1e9c9228e42",
+      "excerpts": [
+        {
+          "start_line": 262,
+          "end_line": 264,
+          "text": "    private final void o(int i) {\n        tv.danmaku.videoplayer.core.api.log.PlayerLog.i(\"set user expected quality:\" + i);\n        this.d = i;"
+        },
+        {
+          "start_line": 279,
+          "end_line": 297,
+          "text": "        } else {\n            if (d()) {\n                com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.Companion.setUgcQualityHasSet(true);\n            }\n            com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.Companion companion2 = com.xiaodianshi.tv.yst.preference.TvPreferenceHelper.Companion;\n            tv.danmaku.biliplayerv2.PlayerContainer playerContainer3 = this.b;\n            if (playerContainer3 == null) {\n                p001kotlin.jvm.internal.Intrinsics.throwUninitializedPropertyAccessException(\"mPlayerContainer\");\n                playerContainer3 = null;\n            }\n            companion2.setVideoPlayQuality(playerContainer3.getContext(), this.d);\n        }\n        tv.danmaku.biliplayerv2.PlayerContainer playerContainer4 = this.b;\n        if (playerContainer4 == null) {\n            p001kotlin.jvm.internal.Intrinsics.throwUninitializedPropertyAccessException(\"mPlayerContainer\");\n        } else {\n            playerContainer = playerContainer4;\n        }\n        tv.danmaku.biliplayerv2.service.IVideosPlayDirectorService.DefaultImpls.switchQuality$default(playerContainer.getVideoPlayDirectorService(), this.d, false, false, 6, null);"
+        }
+      ]
+    },
+    {
+      "id": "E15",
+      "title": "弹幕记忆与字幕区域防挡",
+      "source": "com/xiaodianshi/tv/yst/player/menu/danmaku_setting/DanmakuSettingView.java",
+      "source_sha256": "9198cec81afb37e59471f3a628b81d2d9b49f15d9cb6093662ca040ab73e9493",
+      "excerpts": [
+        {
+          "start_line": 241,
+          "end_line": 261,
+          "text": "                    com.xiaodianshi.tv.yst.player.menu.danmaku_setting.DanmakuSettingView danmakuSettingView = com.xiaodianshi.tv.yst.player.menu.danmaku_setting.DanmakuSettingView.this;\n                    boolean zIsProjection = false;\n                    try {\n                        kotlin.Result.Companion companion2 = p001kotlin.Result.Companion;\n                        java.lang.String str2 = (java.lang.String) com.bilibili.lib.blconfig.Contract.DefaultImpls.get$default(companion.config(), \"ott_danmaku_default_switch_save\", null, 2, null);\n                        linkedHashMap.put(p001kotlin.coroutines.jvm.internal.Boxing.boxInt(5205), java.lang.String.valueOf(playerSettingService.getBoolean(tv.danmaku.biliplayerv2.service.setting.DanmakuKeys.PREF_DANMAKU_SWITCH_SAVE, str2 != null && 1 == com.bilibili.cm.core.utils.StringExtKt.toIntOrDefault(str2, 0))));\n                        java.lang.String str3 = (java.lang.String) com.bilibili.lib.blconfig.Contract.DefaultImpls.get$default(companion.config(), \"ott_danmaku_default_opacity\", null, 2, null);\n                        float f = playerSettingService.getFloat(tv.danmaku.biliplayerv2.service.setting.DanmakuKeys.PREF_DANMAKU_OPACITY, (str3 == null || (floatOrNull4 = p001kotlin.text.StringsKt.toFloatOrNull(str3)) == null) ? 1.0f : floatOrNull4.floatValue());\n                        java.lang.Integer numBoxInt = p001kotlin.coroutines.jvm.internal.Boxing.boxInt(5203);\n                        p001kotlin.jvm.internal.StringCompanionObject stringCompanionObject = p001kotlin.jvm.internal.StringCompanionObject.INSTANCE;\n                        java.lang.String str4 = java.lang.String.format(\"%.2f\", java.util.Arrays.copyOf(new java.lang.Object[]{p001kotlin.coroutines.jvm.internal.Boxing.boxFloat(f)}, 1));\n                        p001kotlin.jvm.internal.Intrinsics.checkNotNullExpressionValue(str4, \"format(...)\");\n                        linkedHashMap.put(numBoxInt, str4);\n                        java.lang.String str5 = (java.lang.String) com.bilibili.lib.blconfig.Contract.DefaultImpls.get$default(companion.config(), \"ott_danmaku_default_factor\", null, 2, null);\n                        float f2 = playerSettingService.getFloat(tv.danmaku.biliplayerv2.service.setting.DanmakuKeys.PREF_DANMAKU_SCALING_FACTOR, (str5 == null || (floatOrNull3 = p001kotlin.text.StringsKt.toFloatOrNull(str5)) == null) ? 1.0f : floatOrNull3.floatValue());\n                        java.lang.Integer numBoxInt2 = p001kotlin.coroutines.jvm.internal.Boxing.boxInt(5202);\n                        java.lang.String str6 = java.lang.String.format(\"%.2f\", java.util.Arrays.copyOf(new java.lang.Object[]{p001kotlin.coroutines.jvm.internal.Boxing.boxFloat(f2)}, 1));\n                        p001kotlin.jvm.internal.Intrinsics.checkNotNullExpressionValue(str6, \"format(...)\");\n                        linkedHashMap.put(numBoxInt2, str6);\n                        linkedHashMap.put(p001kotlin.coroutines.jvm.internal.Boxing.boxInt(5206), java.lang.String.valueOf(playerSettingService.getBoolean(tv.danmaku.biliplayerv2.service.setting.DanmakuKeys.PREF_DANMAKU_BOTTOM_BLANK, true)));\n                        tv.danmaku.biliplayerv2.PlayerContainer playerContainer2 = danmakuSettingView.getPlayerContainer();"
+        }
+      ]
+    },
+    {
+      "id": "E16",
+      "title": "播放历史来源选择",
+      "source": "com/xiaodianshi/tv/yst/player/utils/PlayHistoryReader.java",
+      "source_sha256": "9c917eb5cfb788e1fc2e320df246cff836ac9e759e5c5287e08e1cbe3c7df5f2",
+      "excerpts": [
+        {
+          "start_line": 104,
+          "end_line": 110,
+          "text": "        com.xiaodianshi.tv.yst.player.storage.VideoIndexInfo videoIndexInfo = new com.xiaodianshi.tv.yst.player.storage.VideoIndexInfo(cacheKey);\n        boolean zFetchData = new com.xiaodianshi.tv.yst.player.storage.VideoIndexInfoStorage(com.bilibili.lib.foundation.FoundationAlias.getFapp()).fetchData(videoIndexInfo);\n        long j = zFetchData ? videoIndexInfo.id : -1L;\n        p001kotlin.Pair<java.lang.Integer, com.xiaodianshi.tv.yst.api.Cid> pairA = a(autoPlayCard, j);\n        java.lang.StringBuilder sb2 = new java.lang.StringBuilder();\n        sb2.append(\"history.getEpPair cardId=\");\n        sb2.append(autoPlayCard.getCardId());"
+        },
+        {
+          "start_line": 157,
+          "end_line": 181,
+          "text": "    public final p001kotlin.Pair<java.lang.Integer, java.lang.Long> readHistory(@org.jetbrains.annotations.NotNull com.xiaodianshi.tv.yst.api.AutoPlayCard videoCard, @org.jetbrains.annotations.Nullable java.lang.Boolean bool) {\n        p001kotlin.Pair<java.lang.Integer, java.lang.Long> pair;\n        java.lang.Long fromCache;\n        p001kotlin.jvm.internal.Intrinsics.checkNotNullParameter(videoCard, \"videoCard\");\n        p001kotlin.Pair<java.lang.Integer, com.xiaodianshi.tv.yst.api.Cid> epPair = getEpPair(videoCard);\n        if (epPair != null) {\n            com.xiaodianshi.tv.yst.player.PlaySource playSource = com.xiaodianshi.tv.yst.player.PlaySource.INSTANCE;\n            if ((playSource.isIndividuation(java.lang.Integer.valueOf(videoCard.fromPage)) || playSource.isPlaySourceTopic(java.lang.Integer.valueOf(videoCard.fromPage))) && (fromCache = new com.xiaodianshi.tv.yst.api.history.PlayerHistoryStorage(com.bilibili.lib.foundation.FoundationAlias.getFapp()).readFromCache(videoCard, epPair.getSecond())) != null) {\n                pair = new p001kotlin.Pair<>(java.lang.Integer.valueOf(epPair.getFirst().intValue()), fromCache);\n            } else {\n                pair = null;\n            }\n        } else {\n            pair = null;\n        }\n        if (pair == null) {\n            pair = readServer(videoCard);\n        }\n        if (pair == null && !com.bilibili.lib.account.BiliAccount.get(com.bilibili.lib.foundation.FoundationAlias.getFapp()).isLogin() && (!p001kotlin.jvm.internal.Intrinsics.areEqual(bool, java.lang.Boolean.TRUE) || !a)) {\n            java.lang.Long l = new com.xiaodianshi.tv.yst.api.history.PlayerHistoryStorage(com.bilibili.lib.foundation.FoundationAlias.getFapp()).read(videoCard, epPair != null ? epPair.getSecond() : null);\n            if (l != null) {\n                pair = new p001kotlin.Pair<>(java.lang.Integer.valueOf(epPair != null ? epPair.getFirst().intValue() : 0), l);\n            }\n        }\n        return pair;"
+        },
+        {
+          "start_line": 262,
+          "end_line": 269,
+          "text": "    public final p001kotlin.Pair<java.lang.Integer, java.lang.Long> readServer(@org.jetbrains.annotations.NotNull com.xiaodianshi.tv.yst.api.AutoPlayCard videoCard) {\n        int iFindIndexByVideoId;\n        p001kotlin.jvm.internal.Intrinsics.checkNotNullParameter(videoCard, \"videoCard\");\n        com.xiaodianshi.tv.yst.api.WatchProgress watchProgress = videoCard.getWatchProgress();\n        if (watchProgress == null || (iFindIndexByVideoId = INSTANCE.findIndexByVideoId(videoCard, watchProgress.getVideoId())) < 0) {\n            return null;\n        }\n        return new p001kotlin.Pair<>(java.lang.Integer.valueOf(iFindIndexByVideoId), java.lang.Long.valueOf(watchProgress.getProgress()));"
+        }
+      ]
+    },
+    {
+      "id": "E17",
+      "title": "历史列表默认焦点",
+      "source": "com/xiaodianshi/tv/yst/ui/historyfav/view/sub/history/HistoryFeedFragment.java",
+      "source_sha256": "b5357279d6bc3982cb371f68d599e061fb5aa02352c26b2830d461459fcffbf3",
+      "excerpts": [
+        {
+          "start_line": 1849,
+          "end_line": 1858,
+          "text": "        androidx.recyclerview.widget.GridLayoutManager gridLayoutManager = (androidx.recyclerview.widget.GridLayoutManager) layoutManager;\n        if (gridLayoutManager == null) {\n            return false;\n        }\n        int iFindFirstCompletelyVisibleItemPosition = gridLayoutManager.findFirstCompletelyVisibleItemPosition();\n        com.yst.secondary.databinding.SecondaryFragmentHistoryFeedLayoutBinding secondaryFragmentHistoryFeedLayoutBindingF2 = F1();\n        if (secondaryFragmentHistoryFeedLayoutBindingF2 != null && (tvRecyclerView = secondaryFragmentHistoryFeedLayoutBindingF2.rvCards) != null && (viewHolderFindViewHolderForAdapterPosition = tvRecyclerView.findViewHolderForAdapterPosition(iFindFirstCompletelyVisibleItemPosition)) != null && (view = viewHolderFindViewHolderForAdapterPosition.itemView) != null) {\n            boolValueOf = java.lang.Boolean.valueOf(view.requestFocus());\n        }\n        return com.yst.lib.util.YstNonNullsKt.orFalse(boolValueOf);"
+        }
+      ]
+    },
+    {
+      "id": "E18",
+      "title": "本地顶部按钮加载",
+      "source": "com/xiaodianshi/tv/yst/video/unite/d.java",
+      "source_sha256": "d40efc020f5d0252f1fffdd9a6fa0175d23b87b4773e2d224d3b3ae359d26f1f",
+      "excerpts": [
+        {
+          "start_line": 1324,
+          "end_line": 1332,
+          "text": "    private final java.lang.String e0() throws java.io.IOException {\n        java.io.InputStream inputStreamOpen = com.bilibili.lib.foundation.FoundationAlias.getFapp().getAssets().open(\"top_group_button.json\");\n        p001kotlin.jvm.internal.Intrinsics.checkNotNullExpressionValue(inputStreamOpen, \"open(...)\");\n        java.io.Reader inputStreamReader = new java.io.InputStreamReader(inputStreamOpen, p001kotlin.text.Charsets.UTF_8);\n        java.io.BufferedReader bufferedReader = inputStreamReader instanceof java.io.BufferedReader ? (java.io.BufferedReader) inputStreamReader : new java.io.BufferedReader(inputStreamReader, 8192);\n        try {\n            java.lang.String text = p001kotlin.io.TextStreamsKt.readText(bufferedReader);\n            p001kotlin.io.CloseableKt.closeFinally(bufferedReader, null);\n            return text;"
+        }
+      ]
+    },
+    {
+      "id": "E19",
+      "title": "播放控制焦点区域",
+      "source": "com/xiaodianshi/tv/yst/video/unite/l.java",
+      "source_sha256": "d9ca1b5a96e67fa151552310c11ddffa5f0d95d84a364e3eee4deae83a1aeff5",
+      "excerpts": [
+        {
+          "start_line": 1808,
+          "end_line": 1811,
+          "text": "    protected final boolean N() {\n        android.view.View viewV = V();\n        return p001kotlin.jvm.internal.Intrinsics.areEqual(viewV != null ? viewV.getParent() : null, this.b.getMMenuRecycler());\n    }"
+        },
+        {
+          "start_line": 1818,
+          "end_line": 1821,
+          "text": "    protected final boolean O() {\n        com.xiaodianshi.tv.yst.video.unite.ui.BottomVerticalView mBottomView = this.b.getMBottomView();\n        return (mBottomView != null ? mBottomView.findFocus() : null) != null;\n    }"
+        },
+        {
+          "start_line": 1898,
+          "end_line": 1901,
+          "text": "    protected final boolean R() {\n        com.xiaodianshi.tv.yst.video.widget.control.PlayerUniteSeekBar mProgressBar = this.b.getMProgressBar();\n        return mProgressBar != null && mProgressBar.isShown() && p001kotlin.jvm.internal.Intrinsics.areEqual(V(), mProgressBar);\n    }"
+        },
+        {
+          "start_line": 1921,
+          "end_line": 1925,
+          "text": "    protected final boolean T() {\n        android.view.View focusedChild;\n        com.xiaodianshi.tv.yst.video.ui.unite.TopGroupWidget mTopGroupLayout = this.b.getMTopGroupLayout();\n        return (mTopGroupLayout == null || (focusedChild = mTopGroupLayout.getFocusedChild()) == null || !focusedChild.isShown()) ? false : true;\n    }"
+        }
+      ]
+    },
+    {
+      "id": "E20",
+      "title": "播放面板开关处理",
+      "source": "com/xiaodianshi/tv/yst/video/unite/l.java",
+      "source_sha256": "d9ca1b5a96e67fa151552310c11ddffa5f0d95d84a364e3eee4deae83a1aeff5",
+      "excerpts": [
+        {
+          "start_line": 2699,
+          "end_line": 2721,
+          "text": "    protected boolean p0(int i2) {\n        if (F0()) {\n            s0(this, 0L, 1, 1, null);\n        } else if (n()) {\n            g();\n        } else {\n            com.xiaodianshi.tv.yst.ui.favorite.revision.FavoriteRightDialog favoriteRightDialog = this.f;\n            if (favoriteRightDialog != null ? favoriteRightDialog.isShowing() : false) {\n                bl.h12.b.c(this, false, 1, null);\n            } else if (l()) {\n                bl.h12.b.d(this, false, 1, null);\n            } else {\n                if (F0() || i2 != 82) {\n                    if (i2 != 4) {\n                        return false;\n                    }\n                    t0();\n                    return false;\n                }\n                i1();\n            }\n        }\n        return true;"
+        },
+        {
+          "start_line": 2832,
+          "end_line": 2858,
+          "text": "    protected boolean w0() {\n        int childLayoutPosition = 0;\n        if ((F0() || Q() || this.b.getInterceptUniteShow()) ? false : true) {\n            this.b.setInterceptUniteShow(false);\n            O0();\n            return true;\n        }\n        if (!N()) {\n            return false;\n        }\n        androidx.recyclerview.widget.RecyclerView mMenuRecycler = this.b.getMMenuRecycler();\n        if (mMenuRecycler != null) {\n            android.view.View viewV = V();\n            p001kotlin.jvm.internal.Intrinsics.checkNotNull(viewV);\n            childLayoutPosition = mMenuRecycler.getChildLayoutPosition(viewV);\n        }\n        L0(V(), m0(childLayoutPosition));\n        return true;\n    }\n\n    protected boolean x0() {\n        if (!((F0() || Q() || this.b.getInterceptUniteShow()) ? false : true)) {\n            return false;\n        }\n        this.b.setInterceptUniteShow(false);\n        h1();\n        return true;"
+        }
+      ]
+    },
+    {
+      "id": "E21",
+      "title": "主入口返回恢复失败的方法",
+      "source": "com/xiaodianshi/tv/yst/ui/main/MainActivity.java",
+      "source_sha256": "cb67bf6b03c218011a0367fe113eef16773573a57b667da194f54a13c6e9ad74",
+      "excerpts": [
+        {
+          "start_line": 3129,
+          "end_line": 3146,
+          "text": "    public void onBackPressed() {\n        /*\n            r7 = this;\n            com.xiaodianshi.tv.yst.support.ServerClock r0 = com.xiaodianshi.tv.yst.support.ServerClock.INSTANCE\n            long r0 = r0.now()\n            r2 = -1\n            int r4 = (r0 > r2 ? 1 : (r0 == r2 ? 0 : -1))\n            if (r4 == 0) goto L17\n            long r2 = r7.x\n            long r2 = r0 - r2\n            r4 = 500(0x1f4, double:2.47E-321)\n            int r6 = (r2 > r4 ? 1 : (r2 == r4 ? 0 : -1))\n            if (r6 >= 0) goto L17\n            return\n        L17:\n            r7.x = r0\n            com.xiaodianshi.tv.yst.ui.main.MainFragment r0 = r7.G\n            r1 = 0"
+        },
+        {
+          "start_line": 3223,
+          "end_line": 3225,
+          "text": "            return\n        */\n        throw new UnsupportedOperationException(\"Method not decompiled: com.xiaodianshi.tv.yst.ui.main.MainActivity.onBackPressed():void\");"
+        }
+      ]
+    },
+    {
+      "id": "E22",
+      "title": "详情路由与布局条件",
+      "source": "com/xiaodianshi/tv/yst/videodetail/VideoPlayActivity.java",
+      "source_sha256": "bc17b86827bc671110df6c9557ed141536f7e4014f9d03ea84cd3b94b5f10dc7",
+      "excerpts": [
+        {
+          "start_line": 1130,
+          "end_line": 1164,
+          "text": "        com.xiaodianshi.tv.yst.widget.unite.UniteTitleCoverLayout uniteTitleCoverLayout3 = this.j;\n        boolean z = false;\n        if (uniteTitleCoverLayout3 != null) {\n            uniteTitleCoverLayout3.setFullScreen(this.H && this.v != 1);\n        }\n        com.xiaodianshi.tv.yst.widget.unite.UniteTitleCoverLayout.Companion companion = com.xiaodianshi.tv.yst.widget.unite.UniteTitleCoverLayout.Companion;\n        if (companion.isDetailOGvOrSerial(videoDetail, this.e) || companion.isNewStylePage(videoDetail, true, this.e)) {\n            videoDetail.setPreloadCover(this.v != 1);\n            videoDetail.setPreloadEpIndex(pair != null ? pair.getFirst().intValue() : 0);\n        }\n        com.xiaodianshi.tv.yst.widget.unite.UniteTitleCoverLayout uniteTitleCoverLayout4 = this.j;\n        if (uniteTitleCoverLayout4 != null) {\n            com.xiaodianshi.tv.yst.widget.unite.UniteTitleCoverLayout.renderLayout$default(uniteTitleCoverLayout4, videoDetail, null, pair != null ? pair.getFirst().intValue() : 0, java.lang.Boolean.valueOf(!this.H || this.v == 1), null, null, 48, null);\n        }\n        kotlin.h46 presenter = getPresenter();\n        if (presenter != null && presenter.J()) {\n            z = true;\n        }\n        if (z && (uniteTitleCoverLayout = this.j) != null) {\n            uniteTitleCoverLayout.setVisibility(8);\n        }\n        h0(videoDetail, pair, str);\n    }\n\n    @Override // com.xiaodianshi.tv.yst.player.compatible.PlayerKeyEventDelegate.Callback\n    public boolean inFullPlay() {\n        return !this.g;\n    }\n\n    @Override // com.bilibili.pvtracker.IPage\n    public /* synthetic */ boolean isPollPlayState() {\n        return kotlin.mz1.b(this);\n    }\n\n    @Override // kotlin.i46"
+        }
+      ]
+    }
+  ],
+  "local_menu_page_count": 39,
+  "selected_local_menus": [
+    {
+      "page": "ugc_view",
+      "groups": [
+        {
+          "tabs": [
+            {
+              "type": 26,
+              "name": "点赞"
+            },
+            {
+              "type": 28,
+              "name": "收藏"
+            },
+            {
+              "type": 29,
+              "name": "设置"
+            },
+            {
+              "type": 30,
+              "name": "简介"
+            },
+            {
+              "type": 34,
+              "name": "反馈"
+            },
+            {
+              "type": 4,
+              "name": "UP主"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 1,
+              "name": "选集"
+            },
+            {
+              "type": 2,
+              "name": "合集"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 18,
+              "name": "相关推荐"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 5,
+              "name": "互动"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 501,
+              "name": "投币"
+            },
+            {
+              "type": 503,
+              "name": "点赞"
+            },
+            {
+              "type": 502,
+              "name": "收藏"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 6,
+              "name": "推荐功能"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 601,
+              "name": "杜比音效"
+            },
+            {
+              "type": 602,
+              "name": "杜比全景声"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 7,
+              "name": "播放速度"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 701,
+              "name": "0.5x"
+            },
+            {
+              "type": 702,
+              "name": "0.75x"
+            },
+            {
+              "type": 703,
+              "name": "1.0x"
+            },
+            {
+              "type": 704,
+              "name": "1.25x"
+            },
+            {
+              "type": 705,
+              "name": "1.5x"
+            },
+            {
+              "type": 706,
+              "name": "2.0x"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 8,
+              "name": "清晰度"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 25,
+              "name": "播放方式"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 2501,
+              "name": "自动连播"
+            },
+            {
+              "type": 2503,
+              "name": "单集循环"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 17,
+              "name": "画面比例"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 9,
+              "name": "更多"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 906,
+              "name": "进度显示"
+            },
+            {
+              "type": 901,
+              "name": "弹幕开关"
+            },
+            {
+              "type": 902,
+              "name": "视频信息"
+            },
+            {
+              "type": 903,
+              "name": "问题反馈"
+            },
+            {
+              "type": 908,
+              "name": "镜像播放"
+            },
+            {
+              "type": 910,
+              "name": "音量均衡"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "page": "feed_ugc",
+      "groups": [
+        {
+          "tabs": [
+            {
+              "type": 1,
+              "name": "更多作品"
+            },
+            {
+              "type": 26,
+              "name": "点赞"
+            },
+            {
+              "type": 34,
+              "name": "不感兴趣"
+            },
+            {
+              "type": 28,
+              "name": "收藏"
+            },
+            {
+              "type": 29,
+              "name": "设置"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 7,
+              "name": "倍速"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 701,
+              "name": "0.5x"
+            },
+            {
+              "type": 702,
+              "name": "0.75x"
+            },
+            {
+              "type": 703,
+              "name": "1.0x"
+            },
+            {
+              "type": 704,
+              "name": "1.25x"
+            },
+            {
+              "type": 705,
+              "name": "1.5x"
+            },
+            {
+              "type": 706,
+              "name": "2.0x"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 8,
+              "name": "清晰度"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 25,
+              "name": "播放方式"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 2501,
+              "name": "自动连播"
+            },
+            {
+              "type": 2503,
+              "name": "单集循环"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 9,
+              "name": "更多"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 906,
+              "name": "进度显示"
+            },
+            {
+              "type": 901,
+              "name": "弹幕开关"
+            },
+            {
+              "type": 902,
+              "name": "视频信息"
+            },
+            {
+              "type": 903,
+              "name": "问题反馈"
+            },
+            {
+              "type": 908,
+              "name": "镜像播放"
+            },
+            {
+              "type": 910,
+              "name": "音量均衡"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "page": "common_ugc",
+      "groups": [
+        {
+          "tabs": [
+            {
+              "type": 10,
+              "name": "更多作品"
+            },
+            {
+              "type": 26,
+              "name": "点赞"
+            },
+            {
+              "type": 28,
+              "name": "收藏"
+            },
+            {
+              "type": 29,
+              "name": "设置"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 7,
+              "name": "倍速"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 701,
+              "name": "0.5x"
+            },
+            {
+              "type": 702,
+              "name": "0.75x"
+            },
+            {
+              "type": 703,
+              "name": "1.0x"
+            },
+            {
+              "type": 704,
+              "name": "1.25x"
+            },
+            {
+              "type": 705,
+              "name": "1.5x"
+            },
+            {
+              "type": 706,
+              "name": "2.0x"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 8,
+              "name": "清晰度"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 25,
+              "name": "播放方式"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 2501,
+              "name": "自动连播"
+            },
+            {
+              "type": 2503,
+              "name": "单集循环"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 52,
+              "name": "弹幕设置"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 5201,
+              "name": "滚动速度"
+            },
+            {
+              "type": 5202,
+              "name": "字号大小"
+            },
+            {
+              "type": 5203,
+              "name": "不透明度"
+            },
+            {
+              "type": 5204,
+              "name": "显示区域"
+            },
+            {
+              "type": 5205,
+              "name": "记忆弹幕开关状态"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 9,
+              "name": "更多"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 906,
+              "name": "进度显示"
+            },
+            {
+              "type": 901,
+              "name": "弹幕开关"
+            },
+            {
+              "type": 902,
+              "name": "视频信息"
+            },
+            {
+              "type": 903,
+              "name": "问题反馈"
+            },
+            {
+              "type": 908,
+              "name": "镜像播放"
+            },
+            {
+              "type": 910,
+              "name": "音量均衡"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "page": "no_detail_common_v159_ugc",
+      "groups": [
+        {
+          "tabs": [
+            {
+              "type": 35,
+              "name": "关闭"
+            },
+            {
+              "type": 26,
+              "name": "点赞"
+            },
+            {
+              "type": 34,
+              "name": "不感兴趣"
+            },
+            {
+              "type": 28,
+              "name": "收藏"
+            },
+            {
+              "type": 27,
+              "name": "投币"
+            },
+            {
+              "type": 44,
+              "name": "分享"
+            },
+            {
+              "type": 42,
+              "name": "正在直播"
+            },
+            {
+              "type": 39,
+              "name": "去看原片"
+            },
+            {
+              "type": 48,
+              "name": "追更"
+            },
+            {
+              "type": 50,
+              "name": "追番"
+            },
+            {
+              "type": 1,
+              "name": "选集"
+            },
+            {
+              "type": 7,
+              "name": "倍速"
+            },
+            {
+              "type": 8,
+              "name": "清晰度"
+            },
+            {
+              "type": 29,
+              "name": "设置"
+            },
+            {
+              "type": 58,
+              "name": "全屏长按【OK】效果"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 58,
+              "name": "全屏长按【OK】效果"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 5801,
+              "name": "二倍速"
+            },
+            {
+              "type": 5802,
+              "name": "一键三连"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 7,
+              "name": "倍速"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 701,
+              "name": "0.5x"
+            },
+            {
+              "type": 702,
+              "name": "0.75x"
+            },
+            {
+              "type": 703,
+              "name": "1.0x"
+            },
+            {
+              "type": 704,
+              "name": "1.25x"
+            },
+            {
+              "type": 705,
+              "name": "1.5x"
+            },
+            {
+              "type": 706,
+              "name": "2.0x"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 8,
+              "name": "清晰度"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 25,
+              "name": "播放方式"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 2501,
+              "name": "自动连播"
+            },
+            {
+              "type": 2503,
+              "name": "单集循环"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 49,
+              "name": "音量均衡"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 492,
+              "name": "影音模式"
+            },
+            {
+              "type": 491,
+              "name": "标准模式"
+            },
+            {
+              "type": 490,
+              "name": "关闭"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 52,
+              "name": "弹幕设置"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 5205,
+              "name": "记忆弹幕开关状态"
+            },
+            {
+              "type": 5201,
+              "name": "滚动速度"
+            },
+            {
+              "type": 5202,
+              "name": "字号大小"
+            },
+            {
+              "type": 5203,
+              "name": "不透明度"
+            },
+            {
+              "type": 5204,
+              "name": "显示区域"
+            },
+            {
+              "type": 5206,
+              "name": "底部字幕区域防挡"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 14,
+              "name": "线路"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 9,
+              "name": "更多"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 906,
+              "name": "进度显示"
+            },
+            {
+              "type": 902,
+              "name": "视频信息"
+            },
+            {
+              "type": 903,
+              "name": "问题反馈"
+            },
+            {
+              "type": 907,
+              "name": "跳过片头片尾"
+            },
+            {
+              "type": 908,
+              "name": "镜像播放"
+            },
+            {
+              "type": 910,
+              "name": "音量均衡"
+            },
+            {
+              "type": 911,
+              "name": "在线人数显示"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "page": "detail_common_v159_ugc",
+      "groups": [
+        {
+          "tabs": [
+            {
+              "type": 35,
+              "name": "关闭"
+            },
+            {
+              "type": 26,
+              "name": "点赞"
+            },
+            {
+              "type": 34,
+              "name": "不感兴趣"
+            },
+            {
+              "type": 28,
+              "name": "收藏"
+            },
+            {
+              "type": 27,
+              "name": "投币"
+            },
+            {
+              "type": 44,
+              "name": "分享"
+            },
+            {
+              "type": 53,
+              "name": "视频同款"
+            },
+            {
+              "type": 48,
+              "name": "追更"
+            },
+            {
+              "type": 50,
+              "name": "追番"
+            },
+            {
+              "type": 37,
+              "name": "下一个"
+            },
+            {
+              "type": 7,
+              "name": "倍速"
+            },
+            {
+              "type": 8,
+              "name": "清晰度"
+            },
+            {
+              "type": 29,
+              "name": "设置"
+            },
+            {
+              "type": 58,
+              "name": "全屏长按【OK】效果"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 58,
+              "name": "全屏长按【OK】效果"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 5801,
+              "name": "二倍速"
+            },
+            {
+              "type": 5802,
+              "name": "一键三连"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 7,
+              "name": "倍速"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 701,
+              "name": "0.5x"
+            },
+            {
+              "type": 702,
+              "name": "0.75x"
+            },
+            {
+              "type": 703,
+              "name": "1.0x"
+            },
+            {
+              "type": 704,
+              "name": "1.25x"
+            },
+            {
+              "type": 705,
+              "name": "1.5x"
+            },
+            {
+              "type": 706,
+              "name": "2.0x"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 8,
+              "name": "清晰度"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 25,
+              "name": "播放方式"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 2501,
+              "name": "自动连播"
+            },
+            {
+              "type": 2503,
+              "name": "单集循环"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 49,
+              "name": "音量均衡"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 492,
+              "name": "影音模式"
+            },
+            {
+              "type": 491,
+              "name": "标准模式"
+            },
+            {
+              "type": 490,
+              "name": "关闭"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 52,
+              "name": "弹幕设置"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 5205,
+              "name": "记忆弹幕开关状态"
+            },
+            {
+              "type": 5201,
+              "name": "滚动速度"
+            },
+            {
+              "type": 5202,
+              "name": "字号大小"
+            },
+            {
+              "type": 5203,
+              "name": "不透明度"
+            },
+            {
+              "type": 5204,
+              "name": "显示区域"
+            },
+            {
+              "type": 5206,
+              "name": "底部字幕区域防挡"
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "type": 14,
+              "name": "线路"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 9,
+              "name": "更多"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 906,
+              "name": "进度显示"
+            },
+            {
+              "type": 902,
+              "name": "视频信息"
+            },
+            {
+              "type": 903,
+              "name": "问题反馈"
+            },
+            {
+              "type": 907,
+              "name": "跳过片头片尾"
+            },
+            {
+              "type": 908,
+              "name": "镜像播放"
+            },
+            {
+              "type": 910,
+              "name": "音量均衡"
+            },
+            {
+              "type": 911,
+              "name": "在线人数显示"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "page": "child_view",
+      "groups": [
+        {
+          "tabs": [
+            {
+              "type": 28,
+              "name": "收藏"
+            },
+            {
+              "type": 34,
+              "name": "不感兴趣"
+            },
+            {
+              "type": 8,
+              "name": "清晰度"
+            },
+            {
+              "type": 54,
+              "name": "听视频"
+            }
+          ],
+          "buttons": []
+        },
+        {
+          "tabs": [
+            {
+              "type": 55,
+              "name": "设置"
+            }
+          ],
+          "buttons": [
+            {
+              "type": 5501,
+              "name": "自动连播"
+            },
+            {
+              "type": 5502,
+              "name": "底部展示更多推荐内容"
+            },
+            {
+              "type": 5503,
+              "name": "问题反馈"
+            },
+            {
+              "type": 5504,
+              "name": "底部展示更多推荐内容（下次播放生效）"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "selected_local_top_buttons": [
+    {
+      "play_type": 1,
+      "buttons": [
+        {
+          "type": 1,
+          "text": "全屏观看",
+          "auto_focused": true
+        },
+        {
+          "type": 5,
+          "text": "购买",
+          "auto_focused": false
+        },
+        {
+          "type": 2,
+          "text": "追番",
+          "auto_focused": false
+        },
+        {
+          "type": 3,
+          "text": "视频详情",
+          "auto_focused": false
+        },
+        {
+          "type": 4,
+          "text": "榜单",
+          "auto_focused": false
+        }
+      ]
+    },
+    {
+      "play_type": 2,
+      "buttons": [
+        {
+          "type": 1,
+          "text": "全屏观看",
+          "auto_focused": true
+        },
+        {
+          "type": 5,
+          "text": "购买",
+          "auto_focused": false
+        },
+        {
+          "type": 2,
+          "text": "追剧",
+          "auto_focused": false
+        },
+        {
+          "type": 3,
+          "text": "视频详情",
+          "auto_focused": false
+        },
+        {
+          "type": 4,
+          "text": "榜单",
+          "auto_focused": false
+        }
+      ]
+    },
+    {
+      "play_type": 3,
+      "buttons": [
+        {
+          "type": 1,
+          "text": "全屏观看",
+          "auto_focused": true
+        },
+        {
+          "type": 6,
+          "text": "追更",
+          "auto_focused": false
+        },
+        {
+          "type": 3,
+          "text": "视频详情",
+          "auto_focused": false
+        },
+        {
+          "type": 8,
+          "text": "全部作品",
+          "auto_focused": false
+        }
+      ]
+    },
+    {
+      "play_type": 5,
+      "buttons": [
+        {
+          "type": 1,
+          "text": "全屏观看",
+          "auto_focused": true
+        },
+        {
+          "type": 6,
+          "text": "追更",
+          "auto_focused": false
+        },
+        {
+          "type": 3,
+          "text": "视频详情",
+          "auto_focused": false
+        },
+        {
+          "type": 8,
+          "text": "全部作品",
+          "auto_focused": false
+        }
+      ]
+    },
+    {
+      "play_type": 6,
+      "buttons": [
+        {
+          "type": 1,
+          "text": "全屏观看",
+          "auto_focused": true
+        },
+        {
+          "type": 5,
+          "text": "购买",
+          "auto_focused": false
+        },
+        {
+          "type": 3,
+          "text": "视频详情",
+          "auto_focused": false
+        }
+      ]
+    }
+  ],
+  "dex_disassembly_checks": {
+    "source": "classes5.dex; PlayerKeyEventDelegate",
+    "method_excerpts": [
+      "203950: 2803                                   |0042: goto 0045 // +0003\n203952: 1501 803f                              |0043: const/high16 v1, #int 1065353216 // #3f80\n203956: 5981 983c                              |0045: iput v1, v8, Lcom/xiaodianshi/tv/yst/player/compatible/PlayerKeyEventDelegate;.j:F // field@3c98\n20395a: 1501 0040                              |0047: const/high16 v1, #int 1073741824 // #4000\n20395e: 7230 203d 1206                         |0049: invoke-interface {v2, v1, v6}, Lcom/xiaodianshi/tv/yst/player/base/IPlayerController;.setSpeed:(FZ)V // method@3d20\n203964: 5c87 973c                              |004c: iput-boolean v7, v8, Lcom/xiaodianshi/tv/yst/player/compatible/PlayerKeyEventDelegate;.i:Z // field@3c97",
+      "203a42: 0c01                                   |0023: move-result-object v1\n203a44: 1200                                   |0024: const/4 v0, #int 0 // #0\n203a46: 3801 0700                              |0025: if-eqz v1, 002c // +0007\n203a4a: 5232 983c                              |0027: iget v2, v3, Lcom/xiaodianshi/tv/yst/player/compatible/PlayerKeyEventDelegate;.j:F // field@3c98\n203a4e: 7230 203d 2100                         |0029: invoke-interface {v1, v2, v0}, Lcom/xiaodianshi/tv/yst/player/base/IPlayerController;.setSpeed:(FZ)V // method@3d20\n203a54: 5c30 973c                              |002c: iput-boolean v0, v3, Lcom/xiaodianshi/tv/yst/player/compatible/PlayerKeyEventDelegate;.i:Z // field@3c97"
+    ]
+  },
+  "limitations": [
+    "Local menus can be replaced by remote configuration/API and filtered by runtime state.",
+    "Decompiler Java is reconstructed, not original source; suspicious branches remain unconfirmed.",
+    "UI appearance, latency, actual focus recovery and playback were not executed."
+  ],
+  "control_proxy_simple_mode_checks": {
+    "method": "com.xiaodianshi.tv.yst.video.unite.l.v0",
+    "text": "    L46:\n        if (r17.getAction() == 1) goto L48;\n        return false;\n    L48:\n        int r5 = r17.getKeyCode();\n        if (r5 == 4) goto L82;\n        if (r5 == 66) goto L79;\n        if (r5 == 82) goto L82;\n        if (r5 == 111) goto L82;\n        if (r5 == 160) goto L79;\n        switch(r5) {\n            case 19: goto L76;\n            case 20: goto L76;\n            case 21: goto L57;\n            case 22: goto L57;\n            case 23: goto L79;\n            default: goto L157;\n        };\n    L57:\n        if (this.b.B0() == false) goto L60;\n        return false;",
+    "note": "Secondary decompilation output confirms common key dispatch; reconstructed Java is not execution evidence."
+  }
+}

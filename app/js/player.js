@@ -47,6 +47,8 @@ var Player = (function () {
     var avGeneration = 0;    /* same, for the avplay singleton's listener */
     var shakaPlayer = null;  /* the live DASH player, kept across videos */
     var qualityRequest = 0;
+    var formatFailures = { hdr: false, atmos: false };
+    var formatPending = null;
     var qualitySwitch = null;
     var lastAppendedQn = 0; /* video data confirmed since this DASH load began */
     var videoRespQn = 0;    /* tier of the last video segment response */
@@ -56,7 +58,7 @@ var Player = (function () {
     function qualityTracks() {
         if (mode !== "mse" || !shakaPlayer || loadPending) { return []; }
         try { return shakaPlayer.getVariantTracks().filter(function (t) {
-            return trackQn(t) > 0 && trackQn(t) <= Settings.qnCap();
+            return trackQn(t) > 0 && trackQn(t) <= ((lastDash && lastDash.capId) || Settings.qnCap());
         }); } catch (e) { return []; }
     }
 
@@ -67,11 +69,13 @@ var Player = (function () {
          * gives Shaka no target segment to append while playback is paused. */
         return isFinite(remaining) && remaining > 0 ? Math.min(margin, remaining / 2) : margin;
     }
+    function effectiveQuality() { return qualityRequest === 125 && lastDash && !lastDash.hdr ? 0 : qualityRequest; }
 
     function applyQuality(preference, clearBuffer, safeMargin) {
+        if (preference === 125 && lastDash && !lastDash.hdr) { preference = 0; }
         var tracks = qualityTracks(), active = currentVideoTrack(shakaPlayer);
         if (!tracks.length) { return false; }
-        var qn = Settings.resolveQuality(tracks.map(trackQn), preference), choice = null;
+        var qn = Settings.resolveQuality(tracks.map(trackQn), preference, (lastDash && lastDash.capId) || Settings.qnCap()), choice = null;
         for (var i = 0; i < tracks.length; i++) {
             if (trackQn(tracks[i]) !== qn) { continue; }
             if (!choice || (active && tracks[i].audioId === active.audioId)) { choice = tracks[i]; }
@@ -114,8 +118,10 @@ var Player = (function () {
 
     function selectQuality(qn, done, loading) {
         if (qualitySwitch || !qualityTracks().length) { return false; }
+        var wantHdr = qn === 125 || (!qn && Settings.qnCap() >= 125 && lastDash && Mpd.hasHdr(lastDash.dash) && !formatFailures.hdr);
+        if (lastDash && wantHdr !== lastDash.hdr) { return false; }
         var before = qualityRequest, active = currentVideoTrack(shakaPlayer);
-        var target = Settings.resolveQuality(qualityTracks().map(trackQn), qn);
+        var target = Settings.resolveQuality(qualityTracks().map(trackQn), qn, (lastDash && lastDash.capId) || Settings.qnCap());
         qualityRequest = qn;
         if (!qn || (trackQn(active) === target && (!loading || lastAppendedQn === target))) {
             try { applyQuality(qn, false); done(""); }
@@ -374,7 +380,7 @@ var Player = (function () {
             "（t=" + (v.currentTime || 0).toFixed(1) + "s" +
             " readyState=" + v.readyState +
             " 缓冲区间=" + bufferedRanges(v) + "）");
-        if (!recoverFromDecodeFailure("卡死无进展")) {
+        if (!recoverFromDecodeFailure("卡死无进展", decoderStuck || bufferedAhead(v) >= 3)) {
             emit("error", "卡死无进展，重载阶梯用尽");
         }
     }
@@ -901,7 +907,7 @@ var Player = (function () {
              * from the element instead of from Shaka. Whichever arrives first
              * gets one shot at H.264; `lastDash.retried` stops the other from
              * taking a second. */
-            if (code === 3 && recoverFromDecodeFailure("video element error 3")) { return; }
+            if (code === 3 && recoverFromDecodeFailure("video element error 3", true)) { return; }
             /* A code-less error milliseconds after a decode reload is the old
              * element being torn down, not a new fault. Unswallowed it raced
              * the ladder: 19:52:15 on 2026-08-03 it preempted the avc1 rung
@@ -953,6 +959,7 @@ var Player = (function () {
 
     /* late: called as Player.stop (the viewer leaving), not as the start of a new session. */
     function reset(late) {
+        formatPending = null;
         if (avRestore) { avRestore.cancel(); }
         /* A stop invalidates the callback; it must not restore a previous video. */
         abandonQualitySwitch();
@@ -1321,7 +1328,10 @@ var Player = (function () {
             } catch (e) { liveSeen = "读不出：" + (e && e.message); }
         });
         player.addEventListener("error", function (e) {
-            var err = e && e.detail;
+            var err = mediaError(e && e.detail);
+            if (formatPending) { return; }
+            if (mode === "mse" && err && err.severity === 2 && recoverFormatError(err)) { return; }
+            if (mode === "mse" && err && err.biliIncomplete && offerStrongToken(true, true)) { return; }
             var recoverable = err && err.severity !== 2 &&
                 (err.category === 1 || err.category === 3);
             /* A recoverable error is Shaka retrying, often on the next mirror;
@@ -1427,7 +1437,7 @@ var Player = (function () {
              * refused for the same reason the moment they arrive; the answer to
              * a codec this set claimed and then could not decode is H.264. */
             if (err && err.category === 3 && err.severity === 2 &&
-                    recoverFromDecodeFailure(describeShakaError(err))) {
+                    recoverFromDecodeFailure(describeShakaError(err), true)) {
                 return;
             }
             /* Only what Shaka itself calls recoverable gets retried in silence.
@@ -1543,7 +1553,8 @@ var Player = (function () {
         try {
             var RT = shaka.net.NetworkingEngine.RequestType;
             var ne = player.getNetworkingEngine();
-            ne.registerRequestFilter(function (type, request) {
+            ne.registerRequestFilter(function (type, request, context) {
+                if (type === RT.SEGMENT && context) { context.biliGeneration = mseGeneration; }
                 if (type !== RT.SEGMENT) { return; }
                 /* B: a file the strong manifest also names goes out under its
                  * signature — the whole candidate list, mirrors included. */
@@ -1593,8 +1604,22 @@ var Player = (function () {
                  * starts before its teardown) was being stamped req1=20ms. */
                 if (marks && marks.manifest !== undefined) { mark("req1"); }
             });
-            ne.registerResponseFilter(function (type, response) {
+            ne.registerResponseFilter(function (type, response, context) {
                 if (type !== RT.SEGMENT) { return; }
+                if (context && context.biliGeneration !== undefined && context.biliGeneration !== mseGeneration) {
+                    throw new shaka.util.Error(shaka.util.Error.Severity.RECOVERABLE, shaka.util.Error.Category.PLAYER, shaka.util.Error.Code.OPERATION_ABORTED);
+                }
+                var headerRange = /bytes\s+(\d+)-(\d+)/.exec((response.headers || {})["content-range"] || (response.headers || {})["Content-Range"] || "");
+                var actualBytes = response.data && response.data.byteLength || 0;
+                if (headerRange && actualBytes !== Number(headerRange[2]) - Number(headerRange[1]) + 1) {
+                    var whyRange = "分段响应不完整：" + actualBytes + "/" + (Number(headerRange[2]) - Number(headerRange[1]) + 1) + " 字节";
+                    if (recoverFormatFor(response.uri || response.originalUri, whyRange)) {
+                        throw new shaka.util.Error(shaka.util.Error.Severity.RECOVERABLE, shaka.util.Error.Category.PLAYER, shaka.util.Error.Code.OPERATION_ABORTED);
+                    }
+                    var incomplete = new shaka.util.Error(shaka.util.Error.Severity.CRITICAL, shaka.util.Error.Category.NETWORK, shaka.util.Error.Code.HTTP_ERROR, response.uri, whyRange);
+                    incomplete.biliIncomplete = true;
+                    throw incomplete;
+                }
                 var respQn = videoQnOfToken(lastDash && lastDash.dash, fileTokenOf(response.uri));
                 if (respQn) { videoRespQn = respQn; }
                 /* The first segment answered after load() settled is media:
@@ -1958,7 +1983,7 @@ var Player = (function () {
      * token fired only after the whole family+tier ladder had flooded the
      * limiter. Either signal — a recorded bad file, or a 403 in hand — is
      * enough. */
-    function offerStrongToken(known403) {
+    function offerStrongToken(known403, incomplete) {
         if (strongEmitted) { return false; }
         /* `lastDash.dash.strong` — the flag lives on the playurl payload; the
          * old `lastDash.strong` read an undefined property and never fired. */
@@ -1971,9 +1996,9 @@ var Player = (function () {
          * it did, and the ladder's exit 「回到 web 端点压中低档」 never dropped
          * a tier, it re-asked for a strong token that had just failed. */
         if (lastDash && lastDash.dash) { lastDash.dash.strongTried = true; }
-        log("web 令牌高档被 403 拒，压档前先试 app 端点强令牌");
+        log(incomplete ? "web 流响应不完整，压档前先试 app 端点强令牌" : "web 令牌高档被 403 拒，压档前先试 app 端点强令牌");
         lastDecodeHandled = false;
-        emit("error", "web 令牌 403，交给 app 端点强令牌");
+        emit("error", incomplete ? "web 流响应不完整，交给 app 端点强令牌" : "web 令牌 403，交给 app 端点强令牌");
         return true;
     }
 
@@ -2424,9 +2449,78 @@ var Player = (function () {
      * H.265 needs 502, so the "fix" tripled the bytes on a link that was being
      * throttled precisely for asking too much — then lasted 25 seconds where
      * H.265 had managed 32. Bytes are the one thing this set cannot spare. */
-    function recoverFromDecodeFailure(why) {
-        if (!lastDash) { return false; }
+    function recoverFormat(kind, why) {
+        if (formatPending) { return true; }
+        if (mode !== "mse" || !lastDash || formatFailures[kind]) { return false; }
+        var dash = lastDash.dash;
+        if ((kind === "atmos" && lastDash.audioCodec !== "ec-3") || (kind === "hdr" && !lastDash.hdr)) { return false; }
+        formatFailures[kind] = true;
+        var alternate = kind === "atmos" ? (dash.audio || []).some(function (r) { return /^mp4a/.test(r.codecs || "") && r.segments; }) :
+            (dash.video || []).some(function (r) { return r.id < 125 && r.segments; });
+        /* Even without an alternate, do not reload the known failed format.
+         * The existing error path can then try a fresh ordinary stream. */
+        if (!alternate) { return false; }
+        var pending = { generation: mseGeneration, dash: dash };
+        formatPending = pending;
+        log((kind === "atmos" ? "杜比音轨" : "HDR10") + " 失败（" + why + "），本视频不再重试该格式");
+        emit("status", kind === "atmos" ? "音轨不可用，正在切换为 AAC…" : "HDR10 播放不稳定，正在切换为 SDR…");
+        setTimeout(function () {
+            if (formatPending !== pending || pending.generation !== mseGeneration || !lastDash || lastDash.dash !== dash) { return; }
+            formatPending = null;
+            var at = haveTime ? lastTime : lastDash.startMs || 0;
+            playDashWithShaka(dash, at, true, lastDash.family, lastDash.capId);
+        }, 0);
+        return true;
+    }
 
+    /* Shaka wraps response-filter errors as 1007. Preserve the media URI and
+     * category so an audio failure cannot bypass the independent fallback. */
+    function mediaError(err) {
+        for (var i = 0; i < 3 && err && err.code === 1007; i++) {
+            var inner = err.data && err.data[0];
+            if (!inner || typeof inner !== "object" || typeof inner.category !== "number") { break; }
+            err = inner;
+        }
+        return err;
+    }
+
+    function recoverFormatError(err) {
+        err = mediaError(err);
+        var refused = err && err.category === 1 && err.code === 1001 && err.data &&
+            (err.data[1] === 401 || err.data[1] === 403);
+        /* Web video refusals must reach the existing strong-token recovery.
+         * A web-only Dolby track has no corresponding strong-token audio. */
+        if (refused && lastDash && !lastDash.dash.strong) { return false; }
+        return recoverFormatFor(err && err.data && err.data[0], describeShakaError(err));
+    }
+
+    function recoverFormatFor(uri, why) {
+        if (!lastDash || mode !== "mse") { return false; }
+        var path = swapPathOf(String(uri || ""));
+        function matches(r) {
+            return (r.urls || [r.baseUrl || r.base_url]).some(function (u) { return path && swapPathOf(u) === path; });
+        }
+        if (lastDash.audioCodec === "ec-3" && (lastDash.dash.audio || []).some(function (r) { return r.codecs === "ec-3" && matches(r); })) { return recoverFormat("atmos", why); }
+        if (lastDash.hdr && (lastDash.dash.video || []).some(function (r) { return r.id === 125 && matches(r); })) { return recoverFormat("hdr", why); }
+        return false;
+    }
+
+    function recoverSpecialFormat(why) {
+        if (!lastDash) { return false; }
+        if (lastDash.audioCodec === "ec-3") {
+            try {
+                var info = shakaPlayer.getBufferedInfo(), at = el("html5-video").currentTime;
+                var ahead = function (ranges) { return (ranges || []).some(function (r) { return r.start <= at && r.end > at + 0.5; }); };
+                if (!ahead(info.audio) && ahead(info.video) && recoverFormat("atmos", why)) { return true; }
+            } catch (e) {}
+        }
+        if (lastDash.hdr && recoverFormat("hdr", why)) { return true; }
+        if (lastDash.audioCodec === "ec-3" && recoverFormat("atmos", why)) { return true; }
+        return false;
+    }
+
+    function recoverFromDecodeFailure(why, decoderFailed) {
+        if (!lastDash) { return false; }
         /* One failure, announced twice. The media element raises `error 3` and
          * Shaka raises CHUNK_DEMUXER_ERROR_APPEND_FAILED for the same refused
          * sample, milliseconds apart. Counted as two, they burned both rungs of
@@ -2439,6 +2533,11 @@ var Player = (function () {
         var now = new Date().getTime();
         if (now - lastDecodeFailAt < 3000) { return lastDecodeHandled; }
         lastDecodeFailAt = now;
+        /* Empty buffers and a stalled request are transport evidence. Give
+         * them one bounded same-format reload before disabling HDR/Atmos.
+         * Explicit decoder errors (or buffered data that cannot render) can
+         * still fall back immediately. */
+        if (decoderFailed && recoverSpecialFormat(why)) { lastDecodeHandled = true; return true; }
 
         /* Whatever rung fires next, the screen must say the player is on it.
          * A minute of self-rescue that looks identical to a crash is what got
@@ -2489,6 +2588,7 @@ var Player = (function () {
         var skippedReload = false;
         decodeRecoveries++;
         lastDecodeHandled = true;
+        if (!decoderFailed && decodeRecoveries > 1 && recoverSpecialFormat(why)) { return true; }
 
         if (decodeRecoveries === 1) {
             /* Once per incident, not per rung: if the rotated-to host also fails
@@ -2504,7 +2604,7 @@ var Player = (function () {
              * 20:17 spent twenty seconds proving it (av01 starved, cosov already
              * blacklisted, one host left, reload starved identically). Skip
              * straight to the family below — a different file. */
-            if (why === "卡死无进展" && lead === wasLead) {
+            if (why === "卡死无进展" && lead === wasLead && !lastDash.hdr && lastDash.audioCodec !== "ec-3") {
                 log("卡死且没有别的镜像可换，跳过同族重载，直接换编码族");
                 decodeRecoveries = 2;
                 skippedReload = true;
@@ -2739,11 +2839,17 @@ var Player = (function () {
             }
         }
         preferGoodHosts(dash);
+        function buildManifest(data, family, first) {
+            return Mpd.build(data, capId || Settings.qnCap(), family, first, {
+                hdr: !formatFailures.hdr && (qualityRequest === 125 || (!qualityRequest && (capId || Settings.qnCap()) >= 125)),
+                atmos: !formatFailures.atmos
+            });
+        }
         var usable = withoutBadFiles(dash);
-        var manifest = Mpd.build(usable, capId || Settings.qnCap(), prefer, lessonFamily);
+        var manifest = buildManifest(usable, prefer, lessonFamily);
         if (!manifest && !prefer) {
             /* The preferred family had nothing usable. H.264 is always there. */
-            manifest = Mpd.build(usable, capId || Settings.qnCap(), "avc1");
+            manifest = buildManifest(usable, "avc1");
         }
         if (!manifest && prefer && objectKeys(badFiles).length) {
             /* A pinned family emptied by the ban. The per-file rung pins the
@@ -2755,8 +2861,8 @@ var Player = (function () {
              * file the decoder froze on at 3s was excised, the pin emptied the
              * manifest, the list was ignored, the same file came back, and the
              * loop ran every twenty seconds with the viewer on a black screen. */
-            manifest = Mpd.build(usable, capId || Settings.qnCap(), null, lessonFamily) ||
-                       Mpd.build(usable, capId || Settings.qnCap(), "avc1");
+            manifest = buildManifest(usable, null, lessonFamily) ||
+                       buildManifest(usable, "avc1");
             if (manifest) {
                 log("指定的 " + prefer + " 剔掉坏文件后够不到基线，放开族的限制，改用 " + Mpd.chosen());
                 prefer = null;
@@ -2781,8 +2887,8 @@ var Player = (function () {
              * so the ban yields rather than the video. */
             log("坏文件名单把清单掏空了，这次忽略名单重建");
             badFiles = {};
-            manifest = Mpd.build(dash, capId || Settings.qnCap(), prefer, lessonFamily) ||
-                       Mpd.build(dash, capId || Settings.qnCap(), "avc1");
+            manifest = buildManifest(dash, prefer, lessonFamily) ||
+                       buildManifest(dash, "avc1");
         }
         if (!manifest) {
             emit("error", "拼不出播放清单（缺少分段索引）");
@@ -2804,7 +2910,7 @@ var Player = (function () {
         log("编码 " + usedFamily + (prefer ? "（指定）" : "") +
             (capId ? "，画质压到 qn" + capId : ""));
         lastDash = { dash: dash, startMs: startMs, family: usedFamily,
-                     capId: capId || 0 };
+                     capId: capId || 0, hdr: Mpd.chosenHdr(), audioCodec: Mpd.chosenAudio() };
         /* The swap map rewrites the web manifest it was made for. A build from
          * anything else — the strong manifest after a swap, above all — asks
          * with its own urls, in the order rotateMirrors and preferGoodHosts
@@ -2816,7 +2922,7 @@ var Player = (function () {
             emit("error", "这台设备的浏览器内核不支持 DASH 播放");
             return;
         }
-        player.configure({ abr: { enabled: !qualityRequest },
+        player.configure({ abr: { enabled: !effectiveQuality() },
             streaming: { bufferingGoal: bufGoal, bufferBehind: bufBehind } });
         if (bufGoal !== 72) {
             log("最高一档 " + (topBw / 1000000).toFixed(1) + " Mbit/s，前方缓冲压到 " + bufGoal + " 秒、身后留 " + bufBehind + " 秒");
@@ -2834,7 +2940,7 @@ var Player = (function () {
          * anyway left the flag saying paused under a playing video: the
          * watchdog off for the rest of it, the banner never hiding, and the
          * first 确认 "resuming" something already playing. */
-        v.autoplay = !userPaused && !qualityRequest;
+        v.autoplay = !userPaused && !effectiveQuality();
 
         mark("manifest");
         var url = URL.createObjectURL(new Blob([manifest], { type: "application/dash+xml" }));
@@ -2858,7 +2964,7 @@ var Player = (function () {
             if (gen !== mseGeneration) { return; }
             mark("loaded");
             loadPending = false;
-            if (!qualityRequest) { applyQuality(0, false); return; }
+            if (!effectiveQuality()) { applyQuality(0, false); return; }
             /* A fresh load may have buffered a different initial tier. Use the
              * same target-video-data confirmation as an in-place selection. */
             return new Promise(function (resolve, reject) {
@@ -2905,8 +3011,14 @@ var Player = (function () {
         })["catch"](function (e) {
             try { URL.revokeObjectURL(url); } catch (e2) {}
             if (gen !== mseGeneration) { return; }
+            e = mediaError(e);
             /* 7000 is LOAD_INTERRUPTED, which is a newer load winning. */
             if (e && e.code === 7000) { return; }
+            if (formatPending) { return; }
+            if (recoverFormatError(e)) { return; }
+            if (e && e.biliIncomplete && offerStrongToken(true, true)) { return; }
+            if (lastDash && lastDash.hdr && e && e.category === 3 && recoverFormat("hdr", "HDR10 加载失败")) { return; }
+            if (lastDash && lastDash.audioCodec === "ec-3" && e && e.category === 3 && recoverFormat("atmos", "杜比音轨加载失败")) { return; }
             if (e && e.qualitySelection) { emit("error", "画质尚未就绪：" + e.message); return; }
 
             /* A refusal from a host we only just blacklisted is worth one
@@ -3379,12 +3491,13 @@ var Player = (function () {
              * whose stop/close are native and are not free even when nothing
              * is playing. Split the mark rather than guess at it. */
             mark("teardown");
-            playDashWithShaka(dash, startMs);
+            playDashWithShaka(dash, startMs, false, null, options && options.capId);
         },
 
         qualityChoices: function (dash) {
             var ids = qualityTracks().map(trackQn);
-            if (!ids.length && dash) { ids = Mpd.tiers(dash, Settings.qnCap()); }
+            if (dash) { ids = ids.concat(Mpd.tiers(dash, Settings.qnCap())); }
+            if (dash && Mpd.hasHdr(dash, true)) { ids.push(125); }
             return ids.filter(function (id, i) { return ids.indexOf(id) === i; })
                 .sort(function (a, b) { return b - a; });
         },
@@ -3498,7 +3611,17 @@ var Player = (function () {
 
         durationMs: function () { return duration; },
         pickDashVideo: pickDashVideo,
-        stop: function () { reset(true); },
+        formatStatus: function () {
+            var t = mode === "mse" && !loadPending ? currentVideoTrack(shakaPlayer) : null;
+            return { hdrFailed: formatFailures.hdr, atmosFailed: formatFailures.atmos, recovering: !!formatPending,
+                audio: t ? (t.audioCodec === "ec-3" ? (t.spatialAudio ? "Dolby Atmos" : "E-AC-3") : /^mp4a/.test(t.audioCodec || "") ? "AAC" : t.audioCodec || "") : "" };
+        },
+        stop: function (options) {
+            var paused = userPaused;
+            reset(true);
+            if (options && options.keepControls) { userPaused = paused; }
+            if (!options || !options.keepFormats) { formatFailures = { hdr: false, atmos: false }; }
+        },
         lastUnload: function () { return lastUnload; },
         mode: function () { return mode; }
     };

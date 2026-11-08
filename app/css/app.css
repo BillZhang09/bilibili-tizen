@@ -271,6 +271,7 @@ body.density-5 .card-info-date { display: block; width: 100%; margin: 2px 0 0; f
 .speed-row { display: flex; align-items: center; gap: 12px; margin-left: 8px; }
 .speed-chips { display: flex; gap: 10px; }
 #panel-actions .opt, #playback-choices .opt { font-size: 24px; padding: 8px 18px; }
+#playback-choices .opt[aria-disabled="true"] { opacity: 0.5; }
 
 #video-actions {
     position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 40;

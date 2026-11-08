@@ -12,12 +12,10 @@ var Settings = (function () {
         return data;
     }
 
-    /* 画质上限（设置页「画质」，2026-10-18 起；此前是 config.js 里写死的 PREFERRED_QN = 80）。
-     * 默认 4K：账号拿不到的档 bilibili 根本不给 —— 非大会员的 dash.video 只到 1080P（「4K 查过了」那节的表），
-     * 所以默认值只在大会员身上起作用，其他人和以前一模一样。8K / HDR / 杜比视界不在选项里：这台电视 4K、
-     * 那几档要别的 fnval 位和色彩处理，没验证过。 */
-    var QN_STEPS = [120, 112, 80, 64, 32];
-    var PLAY_QNS = [16, 32, 64, 74, 80, 112, 116, 120];
+    /* New installations keep the existing 4K default. HDR is an explicit choice;
+     * a failed switch must not change either saved preference. */
+    var QN_STEPS = [125, 120, 112, 80, 64, 32];
+    var PLAY_QNS = [16, 32, 64, 74, 80, 112, 116, 120, 125];
 
     function language(track) {
         var lang = String((track || {}).lan || "").toLowerCase().replace(/^ai-/, "");
@@ -39,9 +37,10 @@ var Settings = (function () {
             return PLAY_QNS.indexOf(q) >= 0 ? q : 0;
         },
         /* Missing tiers change this video's result, never the saved preference. */
-        resolveQuality: function (available, preference) {
+        resolveQuality: function (available, preference, cap) {
             var q = preference === undefined ? this.qualityPreference() : preference;
-            var ids = available.filter(function (id) { return id <= Settings.qnCap(); })
+            var limit = cap || Settings.qnCap();
+            var ids = available.filter(function (id) { return id <= limit; })
                 .sort(function (a, b) { return a - b; });
             if (!ids.length) { return 0; }
             if (!q) { return ids[ids.length - 1]; }
@@ -69,6 +68,7 @@ var Settings = (function () {
             }
             return best;
         },
+        preferAtmos: function () { return this.get("preferAtmos", true) !== false; },
         get: function (k, fallback) {
             var v = load()[k];
             return v === undefined ? fallback : v;

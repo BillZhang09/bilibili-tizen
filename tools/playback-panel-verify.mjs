@@ -35,10 +35,10 @@ function harness() {
     if (nodes.has(id)) return nodes.get(id);
     const value = {id, textContent: '', className: '', style: {}, children: [], offsetParent: {},
       contains(target) { return this.children.includes(target); },
-      querySelectorAll(selector) { return selector === '.opt' ? this.children : []; },
+      querySelectorAll(selector) { return (selector === '.opt' || selector === '.opt.focusable') ? this.children : []; },
       querySelector(selector) {
         if (selector === '.focusable') return this.children[0] || null;
-        const match = selector.match(/^\[data-playback-choice="([^"]*)"\]$/);
+        const match = selector.match(/^(?:\.focusable)?\[data-playback-choice="([^"]*)"\]$/);
         return match ? this.children.find(child => child.getAttribute('data-playback-choice') === match[1]) || null : null;
       },
       addEventListener() {},
@@ -72,7 +72,7 @@ function harness() {
     Auth: {isLoggedIn: () => false, accessKey: () => ''},
     Nav: {onBack() {}, onKey: f => { keyHandler = f; }, current: () => focus, focus: target => { focus = target; },
       KEY: {RETURN: 10009, UP: 38, DOWN: 40, ENTER: 13, PLAY_PAUSE: 10252, PLAY: 415, PAUSE: 19}},
-    Player: {on() {}, stop() {}, mode: () => 'shaka', currentQuality: () => actual, qualityChoices: () => [80, 64, 32],
+    Player: {formatStatus: () => ({}), on() {}, stop() {}, mode: () => 'shaka', currentQuality: () => actual, qualityChoices: () => [80, 64, 32],
       selectQuality: (qn, done) => { qualityRequests.push({qn, done}); return true; }},
     EpisodeNav: {adjacent: () => null},
     API: {videoActionReady: () => true, view: (b, ok) => ok({bvid: b, cid: 2, title: 'next'}),
@@ -189,6 +189,26 @@ check('a late quality result keeps subtitle choices, focus and the selected lang
   assert.equal(h.Settings.qualityPreference(), 64);
   h.subtitleRequests.at(-1).ok([{from: 0, to: 10, text: '切档之后的字幕'}]);
   assert.equal(h.node('subtitle-text').textContent, '切档之后的字幕');
+});
+
+check('format fallback and subtitle fallback remain visible without changing autoplay or menu focus', () => {
+  const h = harness();
+  h.context.Player.formatStatus = () => ({audio: 'AAC', hdrFailed: true, atmosFailed: true});
+  h.enter('panel-subtitles'); h.select('0');
+  h.Settings.set('subtitleLanguage', 'fr');
+  h.subtitleRequests.at(-1).ok([{from: 0, to: 10, text: 'caption after format fallback'}]);
+  const status = h.node('playback-control-status').textContent;
+  assert.match(status, /没有偏好语言/);
+  assert.match(status, /HDR10 不稳定，已使用 SDR/);
+  assert.match(status, /杜比音轨不可用，已使用 AAC/);
+  assert.equal(h.node('playback-audio').textContent, '音频 AAC');
+  assert.equal(h.node('subtitle-text').textContent, 'caption after format fallback');
+  assert.equal(h.focused().getAttribute('data-playback-choice'), '0');
+  h.enter('panel-autoplay');
+  assert.equal(h.choice(), 'subtitles');
+  assert.equal(h.Settings.get('autoplayNext'), false);
+  assert.equal(h.Settings.subtitleLanguage(), 'fr');
+  assert.equal(h.qualityRequests.length, 0);
 });
 
 check('autoplay leaves either open menu intact and Back restores the right entry before closing', () => {

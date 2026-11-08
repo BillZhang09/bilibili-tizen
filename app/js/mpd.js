@@ -34,12 +34,12 @@ var Mpd = (function () {
         return out;
     }
 
-    function representation(rep, extra) {
+    function representation(rep, extra, properties) {
         if (!rep || !rep.segments) { return ""; }
         return '      <Representation id="' + esc(rep.id) +
                '" bandwidth="' + esc(rep.bandwidth || 1000000) +
                '" codecs="' + esc(rep.codecs) + '"' + (extra || "") + ">\n" +
-               baseUrls(rep) +
+               (properties || "") + baseUrls(rep) +
                '        <SegmentBase indexRange="' + esc(rep.segments.index) + '">\n' +
                '          <Initialization range="' + esc(rep.segments.init) + '"/>\n' +
                "        </SegmentBase>\n" +
@@ -81,6 +81,39 @@ var Mpd = (function () {
 
     function family(codecs) { return String(codecs || "").split(".")[0]; }
 
+    function hdrSupported() {
+        try { return webapis.avinfo.isHdrTvSupport() === true; }
+        catch (e) { return false; }
+    }
+
+    function audioSupported(codec) {
+        try { return MediaSource.isTypeSupported('audio/mp4; codecs="' + codec + '"'); }
+        catch (e) { return codec === "mp4a.40.2"; }
+    }
+
+    function hdrVideo(r, anySegments) {
+        return !!(r && Number(r.id) === 125 && (r.segments || anySegments) &&
+            /^(hev1|hvc1)\.2\./.test(r.codecs || "") && hdrSupported() && playable(r.codecs));
+    }
+
+    function hasHdr(all, anySegments) {
+        return (all || []).some(function (r) { return hdrVideo(r, anySegments); });
+    }
+
+    function chooseAudios(dash, options) {
+        var all = (dash.audio || []).filter(function (r) { return r.segments && r.codecs; });
+        var enabled = !options || options.atmos !== false;
+        if (typeof Settings !== "undefined" && Settings.preferAtmos) { enabled = enabled && Settings.preferAtmos(); }
+        var dolby = enabled && audioSupported("ec-3") ? all.filter(function (r) {
+            return r.codecs === "ec-3" && r.spatialAudio === true && r.audioSamplingRate > 0 && r.channels > 0;
+        }) : [];
+        /* Each load contains a single audio codec. Falling back to AAC rebuilds
+         * the audio SourceBuffer rather than mixing incompatible reps in ABR. */
+        return (dolby.length ? dolby : all.filter(function (r) {
+            return r.codecs.indexOf("mp4a") === 0 && audioSupported(r.codecs);
+        })).sort(function (a, b) { return (a.bandwidth || 0) - (b.bandwidth || 0); });
+    }
+
     /* Memoised: the same handful of codec strings come back for every video,
      * and `isTypeSupported` is not guaranteed to be a table lookup — on some
      * engines it goes and asks the decoder. This sits on the path between
@@ -117,16 +150,19 @@ var Mpd = (function () {
 
     var chosen = "";
     var topBw = 0;       /* the highest video bandwidth in the last build, for the buffer budget in player.js */
+    var audioCodec = "", chosenHdr = false;
 
     /* `anySegments`: judge the reps as if their segment ranges were known —
      * the strong-token path has to decide which files' headers to read first,
      * before any of them has been read. */
-    function chooseVideos(all, maxId, prefer, firstChoice, anySegments) {
+    function chooseVideos(all, maxId, prefer, firstChoice, anySegments, options) {
         var usable = [];
+        var hdr = maxId >= 125 && prefer !== "avc1" && (!options || options.hdr !== false) && hasHdr(all, anySegments);
         for (var i = 0; i < (all || []).length; i++) {
             var r = all[i];
             if (r && r.codecs && (r.segments || anySegments) &&
-                    (!maxId || r.id <= maxId) &&
+                    (!maxId || r.id <= maxId) && r.id <= 125 &&
+                    (hdr ? hdrVideo(r, anySegments) : Number(r.id) !== 125) &&
                     /* No AV1 above 1080P (2026-10-18, when the cap went to 4K
                      * for 大会员 accounts). av01 at 1080P is what turned the
                      * picture green and wedged this SoC's decoder (08-06); 4K
@@ -187,6 +223,13 @@ var Mpd = (function () {
          * question often enough. */
         chosen: function () { return chosen; },
         topBandwidth: function () { return topBw; },
+        hdrSupported: hdrSupported,
+        audioSupported: audioSupported,
+        hasHdr: function (dash, discovery) {
+            return hasHdr(((dash || {}).video || []).concat(discovery ? (dash || {}).hdrCandidates || [] : []), !!discovery);
+        },
+        chosenHdr: function () { return chosenHdr; },
+        chosenAudio: function () { return audioCodec; },
 
         /* The two files a fresh start of this response will open first: the
          * top video of the family build() would settle on, and the top audio —
@@ -208,11 +251,12 @@ var Mpd = (function () {
 
         tiers: function (dash, maxId) {
             var keep = chosen, ids = [];
-            var reps = chooseVideos((dash || {}).video, maxId);
+            var reps = chooseVideos((dash || {}).video, Math.min(maxId || 120, 120));
             chosen = keep;
             for (var i = 0; i < reps.length; i++) {
                 if (ids.indexOf(Number(reps[i].id)) < 0) { ids.push(Number(reps[i].id)); }
             }
+            if (maxId >= 125 && hasHdr((dash || {}).video)) { ids.push(125); }
             return ids.sort(function (a, b) { return b - a; });
         },
 
@@ -223,10 +267,8 @@ var Mpd = (function () {
                 return (b.bandwidth || 0) - (a.bandwidth || 0);
             });
             chosen = keep;
-            var audios = (dash.audio || []).filter(function (r) {
-                return r.segments;
-            }).sort(function (a, b) { return (b.bandwidth || 0) - (a.bandwidth || 0); });
-            return { video: videos[0] || null, audio: audios[0] || null };
+            var audios = chooseAudios(dash);
+            return { video: videos[0] || null, audio: audios[audios.length - 1] || null };
         },
 
         /* `maxId` caps the quality ladder — bilibili happily offers 4K and 8K
@@ -238,18 +280,18 @@ var Mpd = (function () {
          *
          * `prefer` pins the codec family; the player uses it to come back on
          * H.264 when a first attempt failed for anything but the network. */
-        build: function (dash, maxId, prefer, firstChoice) {
+        build: function (dash, maxId, prefer, firstChoice, options) {
             if (!dash) { return ""; }
 
-            var videos = chooseVideos(dash.video, maxId, prefer, firstChoice)
+            var videos = chooseVideos(dash.video, maxId, prefer, firstChoice, false, options)
                 .sort(function (a, b) { return (b.bandwidth || 0) - (a.bandwidth || 0); });
 
-            var audios = (dash.audio || []).filter(function (r) {
-                return r.segments;
-            }).sort(function (a, b) { return (a.bandwidth || 0) - (b.bandwidth || 0); });
+            var audios = chooseAudios(dash, options);
 
             if (!videos.length || !audios.length) { return ""; }
             topBw = videos[0].bandwidth || 0;
+            chosenHdr = Number(videos[0].id) === 125;
+            audioCodec = audios[0].codecs;
 
             var vBody = "";
             for (var i = 0; i < videos.length; i++) {
@@ -260,7 +302,17 @@ var Mpd = (function () {
             }
             var aBody = "";
             for (var j = 0; j < audios.length; j++) {
-                aBody += representation(audios[j], ' audioSamplingRate="44100"');
+                var a = audios[j], properties = "";
+                var dolbyChannels = { 2: "A000", 6: "F801", 8: "FA01" }[a.channels];
+                if (a.codecs === "ec-3" && dolbyChannels) {
+                    properties += '        <AudioChannelConfiguration schemeIdUri="tag:dolby.com,2014:dash:audio_channel_configuration:2011" value="' + dolbyChannels + '"/>\n';
+                } else if (a.channels && a.codecs !== "ec-3") {
+                    properties += '        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="' + esc(a.channels) + '"/>\n';
+                }
+                if (a.spatialAudio) {
+                    properties += '        <SupplementalProperty schemeIdUri="tag:dolby.com,2018:dash:EC3_ExtensionType:2018" value="JOC"/>\n';
+                }
+                aBody += representation(a, a.audioSamplingRate ? ' audioSamplingRate="' + esc(a.audioSamplingRate) + '"' : "", properties);
             }
 
             /* `static` and isoff-on-demand: the whole file exists, addressed by
@@ -274,6 +326,9 @@ var Mpd = (function () {
                 "  <Period>\n" +
                 '    <AdaptationSet contentType="video" mimeType="video/mp4"' +
                 ' segmentAlignment="true" startWithSAP="1">\n' +
+                (chosenHdr ? '      <EssentialProperty schemeIdUri="urn:mpeg:mpegB:cicp:ColourPrimaries" value="9"/>\n' +
+                    '      <EssentialProperty schemeIdUri="urn:mpeg:mpegB:cicp:TransferCharacteristics" value="16"/>\n' +
+                    '      <EssentialProperty schemeIdUri="urn:mpeg:mpegB:cicp:MatrixCoefficients" value="9"/>\n' : "") +
                 vBody +
                 "    </AdaptationSet>\n" +
                 '    <AdaptationSet contentType="audio" mimeType="audio/mp4"' +

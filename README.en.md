@@ -196,6 +196,8 @@ Press Down during playback to turn subtitles on or off, select a track, or retur
 
 The same panel includes an autoplay toggle. The panel and Settings share the same preference, which persists across app restarts. With autoplay off, the next-video chooser waits for confirmation at the end.
 
+This feature branch adds HDR10 and a “Prefer Dolby Atmos” switch. The initial cap stays at 4K with Auto quality. A successful HDR10 switch saves the preference and raises the cap; videos without HDR use SDR while retaining the preference. Atmos is preferred by default and the panel shows the active audio. Failed special formats fall back independently to SDR or AAC, once per video session. S85F checks cover track selection, position preservation and AAC recovery from a real truncated response. On S85F, the TV-side PQ gamma state and about 150 seconds of actual Atmos playback with audible, synchronized output have been checked. Failed HDR tiers remain visible as unavailable for the current session, and pending indexes do not hide discovered HDR candidates. A real same-video HDR+Atmos combination remains unaccepted; see the [validation record](docs/HDR10-Atmos-适配验证.md). This branch is not merged or released.
+
 **Does not**:
 - **Casting from the phone.** A cast receiver has to listen on a port; a Tizen
   web widget cannot, regardless of how official it is. The substitute is

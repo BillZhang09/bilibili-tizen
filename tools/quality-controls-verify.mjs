@@ -253,7 +253,7 @@ await check('native live excludes VOD prebuffering and mute',()=>{
 });
 context.Date=Date;
 // The production application is evaluated intact; window.onload is not run.
-context.Player={on:f=>eventHandler=f,qualityChoices:d=>d?Mpd.tiers(d,120):[],currentQuality:()=>0,
+context.Player={formatStatus:()=>({}),on:f=>eventHandler=f,qualityChoices:d=>d?Mpd.tiers(d,120):[],currentQuality:()=>0,
   selectQuality:()=>false,hasPosition:()=>true,position:()=>42000,userPaused:()=>true,rate:()=>1,
   playDash:(...args)=>calls.push(['dash',...args]),playProgressive:(...args)=>calls.push(['prog',...args])};
 let appSource=source('app/js/app.js');
@@ -263,7 +263,7 @@ appSource=appSource.replace('    window.onload = function () {',`    window.__co
         nextupGrid={clear:function(){}};play(d,d.cid);return playing;},
       scrub: function(dir){moveScrub(dir);commitScrub();},
       seedPosition: function(ms){lastKnownPosition=ms;lastKnownDuration=90000;},
-      quality:changeQuality,
+      quality:changeQuality, downgrade:downgrade,
       paint:paintPlaybackControls, rollback:restoreQualityChange, ids:controlQualityIds,
       bind:bindPlaybackControls, closeChoices:closePlaybackChoices,
       pause:setPaused, end:function(){optionsOpen=false;beginAutoNext();}
@@ -540,5 +540,57 @@ await check('stream recovery cancels pending quality replies and blocks selectio
    dashReply.fail('no dash');progReply.fail('no native');assert.equal(s.qualityBusy,false);
   }
  }finally{context.Player=stub;}
+});
+await check('HDR shortcut raises the cap only after the actual HDR track is ready',()=>{
+ context.webapis.avinfo={isHdrTvSupport:()=>true};Settings.set('maxQn',120);Settings.set('preferredQn',0);
+ const hd={...dash,video:[{...rep(125),codecs:'hvc1.2.4.L150.90',width:3840,height:2160},...dash.video]};
+ let actual=80;context.Player.currentQuality=()=>actual;
+ let requested;context.API.playurlDash=(b,c,q,ok,fail)=>{requested=q;dashReply={ok,fail};};progReply=null;
+ session({route:'dash',dashReady:hd});app.quality(125);assert.equal(requested,125);assert.equal(progReply,null);
+ assert.equal(Settings.qnCap(),120);dashReply.ok(hd);assert.equal(calls.at(-1)[3].capId,125);assert.equal(Settings.qnCap(),120);
+ actual=125;eventHandler('quality',{id:125});eventHandler('ready',{});assert.equal(Settings.qnCap(),125);assert.equal(Settings.qualityPreference(),125);
+ assert.equal(node('panel-quality').textContent,'画质 HDR10');
+});
+await check('HDR fallback cannot save a guessed HDR tier or raise the global cap',()=>{
+ Settings.set('maxQn',120);Settings.set('preferredQn',80);context.Player.currentQuality=()=>80;
+ const hd={...dash,video:[{...rep(125),codecs:'hvc1.2.4.L150.90'},...dash.video]};
+ session({route:'dash',dashReady:hd});app.quality(125);dashReply.ok(hd);eventHandler('ready',{});
+ assert.equal(Settings.qnCap(),120);assert.equal(Settings.qualityPreference(),80);
+});
+await check('HDR preparation uses a strong token without tearing down the playing stream',()=>{
+ const hd={...dash,video:[{...rep(125),codecs:'hvc1.2.4.L150.90'},...dash.video]};
+ context.Auth.isLoggedIn=()=>true;context.Auth.accessKey=()=> 'controlled-key';context.Player.badFilesFor=()=>[];
+ let strong;context.API.playurlDashStrong=(aid,cid,cap,ok,fail,avoid,web)=>{strong={aid,cid,cap,ok,web};};
+ session({detail:{bvid:'BVTEST',aid:123},route:'dash',dashReady:dash});app.quality(125);dashReply.ok(hd);
+ assert.equal(strong.aid,123);assert.equal(strong.cap,125);assert.equal(strong.web,hd);assert.equal(calls.length,0);
+ strong.ok({...hd,strong:true});assert.equal(calls.at(-1)[0],'dash');assert.equal(calls.at(-1)[3].capId,125);
+ context.Auth.isLoggedIn=()=>false;context.Auth.accessKey=()=>'';
+});
+await check('audio status follows the active track and clears while a new load is pending',()=>{
+ session({route:'dash'});context.Player.formatStatus=()=>({audio:'Dolby Atmos'});app.paint();assert.equal(node('playback-audio').textContent,'音频 Dolby Atmos');
+ context.Player.formatStatus=()=>({audio:''});app.paint();assert.ok(node('playback-audio').className.includes('hidden'));
+ context.Player.formatStatus=()=>({audio:'AAC',atmosFailed:true});app.paint();assert.match(node('playback-control-status').textContent,/已使用 AAC/);
+});
+await check('a failed HDR tier remains visible and cannot trigger another request',()=>{
+ session({route:'dash'});context.Player.qualityChoices=()=>[125,80,32];context.Player.formatStatus=()=>({hdrFailed:true,audio:'AAC'});
+ app.bind();node('panel-quality').onselect();
+ const html=node('playback-choices').innerHTML;assert.match(html,/aria-disabled="true" data-playback-choice="125">HDR10（本次播放不可用）/);
+ assert.doesNotMatch(html,/class="opt focusable[^>]+aria-disabled/);
+ dashReply=null;app.quality(125);assert.equal(dashReply,null);
+});
+await check('a short web video uses the controller strong-token path and keeps latest pause intent',()=>{
+ context.Player.formatStatus=()=>({});context.Player.startTiming=()=>{};context.Player.stop=o=>calls.push(['stop',o]);
+ context.Player.badFilesFor=()=>[];context.Player.learnStrong=()=>{};context.Player.pickDashVideo=d=>d.video[0];
+ let strong;context.API.playurlDashStrong=(aid,cid,cap,ok)=>strong={aid,cid,cap,ok};
+ const s=session({detail:{bvid:'BVTEST',aid:123},route:'dash',dashReady:{...dash}});
+ eventHandler('error','web 流响应不完整，交给 app 端点强令牌');assert.equal(s.triedStrong,true);assert.equal(strong.aid,123);
+ assert.equal(calls.find(c=>c[0]==='stop')[1].keepControls,true);strong.ok({...dash,strong:true});
+ assert.equal(calls.at(-1)[0],'dash');assert.equal(calls.at(-1)[3].paused,true);
+});
+await check('native fallback to DASH keeps the latest pause intent',()=>{
+ context.Player.learnRoute=()=>{};context.Player.pickDashVideo=d=>d.video[0];
+ session({route:'progressive',startMs:42000,dashReady:dash,quality:80});app.downgrade('refused');
+ assert.equal(calls.find(c=>c[0]==='stop')[1].keepControls,true);
+ assert.equal(calls.at(-1)[0],'dash');assert.equal(calls.at(-1)[3].paused,true);assert.equal(calls.at(-1)[2],42000);
 });
 console.log(`${count}/${count} playback control scenarios passed (controlled media, not device acceptance).`);

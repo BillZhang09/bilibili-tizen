@@ -64,7 +64,7 @@ await check('automatic fallback keeps the first language and prefers humans only
   }
  }
 });
-context.Player={on(){},currentQuality:()=>0,qualityChoices:()=>[]};
+context.Player={formatStatus:()=>({}),on(){},currentQuality:()=>0,qualityChoices:()=>[]};
 let appSource=source('app/js/app.js');
 appSource=appSource.replace('    window.onload = function () {',`    window.__controlsTest={
  session:function(s){playing=s;optionsOpen=true;toastEl=el('toast');return s;},

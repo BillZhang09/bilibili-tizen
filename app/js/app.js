@@ -3360,9 +3360,10 @@
             '<div class="btn focusable" id="btn-danmaku-area"></div></div>' +
 
             '<div class="section">画质</div>' +
-            '<div class="actions"><div class="btn focusable" id="btn-quality"></div></div>' +
+            '<div class="actions"><div class="btn focusable" id="btn-quality"></div>' +
+            '<div class="btn focusable" id="btn-atmos"></div></div>' +
             '<div class="me-sub" style="margin-top:24px">' + (Auth.isLoggedIn() ? "" : "没登录时清晰度更低，先去「我的」扫码登录就能用 1080P。") +
-            '1080P 高码率和 4K 需要大会员，拿不到时用能拿到的最高一档。</div>' +
+            '1080P 高码率和 4K 需要大会员。HDR10 还需要设备和片源支持，不可用时使用可播画质。</div>' +
             '<div class="section">观看记录</div>' +
             '<div class="actions"><div class="btn focusable" id="btn-clear-history">清空观看记录</div></div>' +
             '<div class="me-sub" style="margin-top:24px">只清这台电视上的，B 站账号里的历史不受影响。</div>' +
@@ -3484,10 +3485,18 @@
         function paintQuality() { quality.textContent = "画质上限：" + QN_LABELS[Settings.qnCap()]; }
         paintQuality();
         quality.onselect = function () {
-            var steps = Settings.qnSteps(), at = steps.indexOf(Settings.qnCap());
+            var steps = Settings.qnSteps().filter(function (q) { return q !== 125 || Mpd.hdrSupported(); });
+            var at = steps.indexOf(Settings.qnCap());
             Settings.set("maxQn", steps[(at + 1) % steps.length]);
             paintQuality();
             report("settings", "画质上限=qn" + Settings.qnCap());
+        };
+        var atmos = el("btn-atmos");
+        function paintAtmos() { atmos.textContent = "优先 Dolby Atmos：" + (Settings.preferAtmos() ? "开" : "关"); }
+        paintAtmos();
+        atmos.onselect = function () {
+            Settings.set("preferAtmos", !Settings.preferAtmos());
+            paintAtmos();
         };
         /* Two presses: it cannot be undone, and the button sits one row from
          * where a viewer scrolling the page passes. */
@@ -4054,7 +4063,7 @@
     function prefetchKey(bvid, cid) {
         /* Per account: playurl's tiers and player/v2's position both depend on
          * whose access_key signed the request. */
-        return bvid + ":" + cid + "@" + Accounts.activeId() + ":" + Settings.qnCap() + ":" + progressiveQn();
+        return bvid + ":" + cid + "@" + Accounts.activeId() + ":" + Settings.qnCap() + ":" + progressiveQn() + ":" + Settings.preferAtmos();
     }
 
     /* One request whose answer may be wanted before or after it arrives. */
@@ -4367,11 +4376,11 @@
         sess.timed = false;
         sess.timedLabel = "到画面(强令牌)";
         report("player", why + "，改用强令牌从 " + fmt(atMs) + " 整个重建");
-        Player.stop();
+        Player.stop({ keepFormats: true, keepControls: true });
         sess.dashReady = sd;
         Player.learnStrong(sess.cid, aid);
         var rep = Player.pickDashVideo(sd);
-        playDash(sd, (rep && rep.id) || Settings.qnCap());
+        playDash(sd, (rep && rep.id) || Settings.qnCap(), { paused: Player.userPaused(), quality: Settings.qualityPreference() });
     }
 
     /* The press behind the next play(), for the 到画面 line's 按下起 (D). The
@@ -5569,10 +5578,10 @@
     function panelPage() { return gridColumns() * 2; }
 
     /* The settings page's names for the cap (Settings.qnSteps). */
-    var QN_LABELS = { 120: "4K（最高）", 112: "1080P 高码率", 80: "1080P", 64: "720P", 32: "480P" };
+    var QN_LABELS = { 125: "HDR10", 120: "4K", 112: "1080P 高码率", 80: "1080P", 64: "720P", 32: "480P" };
 
     var QUALITY_NAMES = {
-        127: "8K", 120: "4K", 116: "1080P60", 112: "1080P+",
+        127: "8K", 125: "HDR10", 120: "4K", 116: "1080P60", 112: "1080P+",
         80: "1080P", 74: "720P60", 64: "720P", 32: "480P", 16: "360P"
     };
 
@@ -5873,6 +5882,7 @@
     function currentQualityOptionName() {
         if (!playing || playing.qualityReady === false) { return ""; }
         var actual = playing && (Player.currentQuality() || playing.quality);
+        if (Number(actual) === 125) { return "HDR10"; }
         var size = playing && playing.nativeSize, sides = size ? size.split("×") : [];
         var pixels = sides.length === 2 ? Math.min(Number(sides[0]), Number(sides[1])) : 0;
         return pixels ? pixels + "p" : actual ? qualityOptionName(actual) : "";
@@ -5904,8 +5914,12 @@
         clearTimeout(playing.qualityTimer);
         playing.qualityBusy = false;
         playing.controlTransition = null;
+        if (!why && qn === 125 && Number(Player.currentQuality()) !== 125) {
+            why = "HDR10 不可用，已退回 SDR";
+        }
         if (why) { troubleOrLogin(why, "画质未切换：" + why); }
         else {
+            if (qn === 125) { Settings.set("maxQn", 125); }
             Settings.set("preferredQn", qn);
             report("controls", "画质偏好=" + qn + " 实际=" + (Player.currentQuality() || playing.quality || 0));
         }
@@ -5964,6 +5978,8 @@
     function changeQuality(qn) {
         var session = playing;
         if (!session || !session.route || session.qualityReady === false || session.qualityBusy) { return; }
+        if (qn === 125 && Player.formatStatus().hdrFailed) { paintPlaybackControls(); return; }
+        var selectionCap = qn === 125 ? 125 : Settings.qnCap();
         var revision = (session.qualityRevision || 0) + 1;
         var nativeOnly = stNativeChange && typeof SELFTEST !== "undefined" && SELFTEST === "controls-followup";
         stNativeChange = false;
@@ -6004,10 +6020,11 @@
                     dashWhy || progWhy || "取不到可用视频流");
                 return;
             }
-            var ids = dash ? Mpd.tiers(dash, Settings.qnCap()) : [];
+            var ids = dash ? Mpd.tiers(dash, selectionCap) : [];
             var candidates = ids.slice();
             if (prog) { candidates.push(prog.quality); }
-            var target = Settings.resolveQuality(candidates, qn);
+            var target = Settings.resolveQuality(candidates, qn, selectionCap);
+            if (qn === 125 && target !== 125) { complete("当前视频没有可播的 HDR10"); return; }
             var useDash = ids.indexOf(target) >= 0;
             /* Match startup's legacy-original fallback when its service tier
              * exceeds the requested cap but no DASH tier can be used. */
@@ -6021,7 +6038,7 @@
                 at: Player.hasPosition() ? Player.position() : lastKnownPosition,
                 paused: Player.userPaused(), requested: qn };
             session.startMs = session.controlTransition.at;
-            var options = { paused: session.controlTransition.paused, quality: qn };
+            var options = { paused: session.controlTransition.paused, quality: qn, capId: selectionCap };
             if (useDash) { playDash(dash, target, options); }
             else { startProgressive(prog, options); }
         }
@@ -6029,10 +6046,25 @@
             report("controls", "自测：仅用真实渐进式候选验证原生换流");
             prepared();
         } else {
-            API.playurlDash(session.detail.bvid, session.cid, Settings.qnCap(), function (d) {
-                dash = d; prepared();
+            API.playurlDash(session.detail.bvid, session.cid, selectionCap, function (d) {
+                if (!current()) { return; }
+                dash = d;
+                /* Keep the working token route while preparing a cross-group
+                 * switch. Replacing it with a refused web token makes a
+                 * playable HDR tier fail before selection can be confirmed. */
+                if ((qn === 125 || (session.dashReady && session.dashReady.strong)) && Auth.isLoggedIn() && Auth.accessKey()) {
+                    withAid(session, function (aid) {
+                        if (!current()) { return; }
+                        if (!aid) { prepared(); return; }
+                        mintStrong(aid, session.cid, selectionCap, function (sd) {
+                            if (!current()) { return; }
+                            dash = sd; prepared();
+                        }, function () { if (current()) { prepared(); } }, d);
+                    });
+                } else { prepared(); }
             }, function (why) { dashWhy = why; prepared(); });
         }
+        if (qn === 125) { prepared(); return; }
         API.playurlProgressive(session.detail.bvid, session.cid, Math.min(qn || Settings.qnCap(), Settings.qnCap()), function (p) {
             prog = p; prepared();
         }, function (why) { progWhy = why; prepared(); });
@@ -6084,10 +6116,17 @@
             sub === "empty" ? "无可用字幕" : loaded ? (loaded.lan_doc || loaded.lan) : "正在获取…";
         el("panel-subtitles").textContent = "字幕 " + subLabel;
         var preferredLanguage = Settings.subtitleLanguage();
+        var format = Player.formatStatus();
+        var audio = el("playback-audio");
+        audio.textContent = format.audio ? "音频 " + format.audio : "";
+        audio.className = "act-hint" + (format.audio ? "" : " hidden");
         var status = el("playback-control-status");
-        status.textContent = playing.qualityBusy ? "正在切换画质…" :
-            loaded && preferredLanguage && Settings.subtitleLanguageOf(loaded) !== preferredLanguage
-                ? "没有偏好语言，已使用当前可用字幕" : "";
+        status.textContent = playing.qualityBusy ? "正在切换画质…" : format.recovering ? "正在恢复播放…" :
+            [
+                loaded && preferredLanguage && Settings.subtitleLanguageOf(loaded) !== preferredLanguage ? "没有偏好语言，已使用当前可用字幕" : "",
+                format.hdrFailed ? (Player.currentQuality() > 0 && Player.currentQuality() !== 125 ? "HDR10 不稳定，已使用 SDR" : "HDR10 不可用") : "",
+                format.atmosFailed ? (format.audio === "AAC" ? "杜比音轨不可用，已使用 AAC" : "杜比音轨不可用") : ""
+            ].filter(function (s) { return !!s; }).join(" · ");
         status.className = "act-hint" + (status.textContent ? "" : " hidden");
         if (playbackChoice) { paintPlaybackChoices(false); }
     }
@@ -6099,7 +6138,11 @@
         if (playbackChoice === "quality") {
             entries.push({ value: "0", label: automaticQualityName() });
             var ids = controlQualityIds();
-            for (i = 0; i < ids.length; i++) { entries.push({ value: String(ids[i]), label: qualityOptionName(ids[i]) }); }
+            for (i = 0; i < ids.length; i++) {
+                var unavailable = ids[i] === 125 && Player.formatStatus().hdrFailed;
+                entries.push({ value: String(ids[i]), label: qualityOptionName(ids[i]) +
+                    (unavailable ? "（本次播放不可用）" : ""), disabled: unavailable });
+            }
             var preferred = Settings.qualityPreference();
             current = !preferred ? "0" : playing.qualityReady === false ? "" :
                 String(Player.currentQuality() || playing.quality || Settings.resolveQuality(ids, preferred));
@@ -6117,12 +6160,13 @@
         }
         var html = "";
         for (i = 0; i < entries.length; i++) {
-            html += '<div class="opt focusable' + (entries[i].value === current ? " current" : "") +
-                '" role="button" data-playback-choice="' + entries[i].value + '">' + esc(entries[i].label) + "</div>";
+            html += '<div class="opt' + (entries[i].disabled ? "" : " focusable") + (entries[i].value === current ? " current" : "") +
+                '" role="button"' + (entries[i].disabled ? ' aria-disabled="true"' : "") +
+                ' data-playback-choice="' + entries[i].value + '">' + esc(entries[i].label) + "</div>";
         }
         box.innerHTML = html;
         box.className = "opt-row";
-        var nodes = box.querySelectorAll(".opt");
+        var nodes = box.querySelectorAll(".opt.focusable");
         for (i = 0; i < nodes.length; i++) {
             nodes[i].onselect = function () {
                 var value = this.getAttribute("data-playback-choice");
@@ -6134,7 +6178,7 @@
             };
         }
         var wanted = keep !== null ? keep : current;
-        var target = box.querySelector('[data-playback-choice="' + wanted + '"]') || nodes[0];
+        var target = box.querySelector('.focusable[data-playback-choice="' + wanted + '"]') || nodes[0];
         if ((focus || keep !== null) && target) { Nav.focus(target); }
     }
 
@@ -7307,7 +7351,7 @@
          * the other. It also moves AVPlay's stop/close off the critical path:
          * they cost about 570ms and now run alongside the playurl round trip
          * instead of after it. */
-        Player.stop();
+        Player.stop({ keepFormats: true, keepControls: true });
         playing.failed = false;
 
         /* The fallback's own clock. The 到画面 line for this video has already
@@ -7347,7 +7391,7 @@
              * wherever this television last left it, but *only* when the
              * progressive attempt failed first, which is why it never looked
              * like a rule. */
-            playDash(dash, (vrep && vrep.id) || playing.quality || 0);
+            playDash(dash, (vrep && vrep.id) || playing.quality || 0, { paused: Player.userPaused(), quality: Settings.qualityPreference() });
         }
 
         /* play() asked for both forms at once, and this is the other one —
@@ -8014,11 +8058,11 @@
                        (wantStrong ? "app 端点强令牌" : "web 端点") + "），从 " +
                        fmt(atExp) + " 接着放");
                 var sessExp = playing;
-                Player.stop();
+                Player.stop({ keepFormats: true, keepControls: true });
                 var startExp = function (dashExp) {
                     if (playing !== sessExp) { report("player", "过期重取回来时会话已经没了，丢弃"); return; }
                     var repExp = Player.pickDashVideo(dashExp);
-                    playDash(dashExp, (repExp && repExp.id) || Settings.qnCap());
+                    playDash(dashExp, (repExp && repExp.id) || Settings.qnCap(), { paused: Player.userPaused(), quality: Settings.qualityPreference() });
                 };
                 var webExp = function () {
                     API.playurlDash(sessExp.detail.bvid, sessExp.cid, Settings.qnCap(),
@@ -8054,7 +8098,7 @@
              * quiet pipe. Player raises this via offerStrongToken; app.js also
              * reaches it when a load fails outright. */
             if (playing.route === "dash" && !playing.triedStrong &&
-                    String(data).indexOf("403") >= 0 &&
+                    (String(data).indexOf("403") >= 0 || String(data).indexOf("web 流响应不完整") >= 0) &&
                     playing.dashReady && !playing.dashReady.strong &&
                     playing.detail && (playing.detail.aid || playing.detail.bvid)) {
                 /* The real playhead — lastKnownPosition freezes at 0 through the
@@ -8076,7 +8120,7 @@
                 Player.startTiming();
                 playing.timed = false;
                 playing.timedLabel = "到画面(强令牌)";
-                report("player", "web 令牌被拒（403），直奔 app 端点强令牌，从 " +
+                report("player", (/web 流响应不完整/.test(String(data)) ? "web 流响应不完整" : "web 令牌被拒（403）") + "，直奔 app 端点强令牌，从 " +
                        fmt(atMs) + " 重建");
                 var sessST = playing;
                 /* Tear the failing session down before the multi-second sidx
@@ -8086,7 +8130,7 @@
                  * against the strong rebuild. 「任何会启动新播放的入口，第一件事
                  * 都是拆掉旧的」— the rule downgrade() was fixed to obey. atMs was
                  * read above, before this zeroes the playhead. */
-                Player.stop();
+                Player.stop({ keepFormats: true, keepControls: true });
                 /* The aid may not be in hand, and the case where it is missing
                  * is exactly this one. The home feed's cards carry `id` rather
                  * than `aid` (normalise now reads both), and for any card that
@@ -8124,7 +8168,7 @@
                                    (strongDash.tierNote || (strongDash.video ? strongDash.video.length + " 档" : "0 档")) +
                                    (strongDash.strongTiming ? "，" + strongDash.strongTiming : "") +
                                    "，从 " + fmt(playing.startMs || 0) + " 重建");
-                            playDash(strongDash, (repST && repST.id) || Settings.qnCap());
+                            playDash(strongDash, (repST && repST.id) || Settings.qnCap(), { paused: Player.userPaused(), quality: Settings.qualityPreference() });
                         }, function (whyST) {
                             if (playing !== sessST) { report("player", "强令牌回来时会话已经没了，丢弃"); return; }
                             report("player", "app 端点强令牌也不行（" + whyST + "）");
